@@ -1,0 +1,153 @@
+@import "$lib/colors.scss";
+
+// Globals
+// -------------------------------------------------------------------------------- 
+
+:global(*) {
+  box-sizing: border-box;
+  margin: 0;
+  padding:0;
+  color: $blue-4;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+}
+
+:global(html) {
+  background-color: $bg-1;
+  overflow: hidden;
+}
+
+:global(input[type="text"]) {
+  border: none;
+  outline: none;
+}
+
+:global(th) {
+  font-weight: bold;
+}
+
+:global(button) {
+  background: none;
+  margin: 0;
+  padding: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    border: 1px solid $blue-3;
+    background-color: $blue-2;
+  }
+
+  &:active {
+    color: $blue-1;
+    background-color: $blue-4;
+  }
+}
+
+:global(button[data-focused]) {
+    color: $blue-1;
+    background-color: $blue-4;
+}
+
+:global(button[disabled]) {
+    color: $blue-3;
+    background-color: $blue-2;
+}
+
+:global(select) {
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  color: $blue-4;
+  background-color: $blue-1;
+  padding: 0.5rem;
+
+  &::after {
+    background-color: red;
+  }
+
+  &:active {
+  }
+
+  &:focus {
+  }
+}
+
+// -------------------------------------------------------------------------------- 
+
+
+// Layout Mixins
+// -------------------------------------------------------------------------------- 
+
+@mixin flex-enable($orientation: row) {
+  display: flex;
+  flex-direction: $orientation;
+}
+
+@mixin flex($justify: start, $align: start, $orientation: row) {
+  @include flex-enable($orientation);
+  justify-content: $justify;
+  align-items: $align;
+}
+
+// -------------------------------------------------------------------------------- 
+
+
+// Position & Size Mixins
+// -------------------------------------------------------------------------------- 
+
+@mixin translate($x: 0px, $y: 0px, $dx: 0px, $dy: 0px) {
+  position: absolute;
+  left: $x;
+  top: $y;
+  transform: translateX($dx) translateY($dy);
+}
+
+@mixin translate-bottom($x: 0px, $y: 0px, $dx: 0px, $dy: 0px) {
+  position: absolute;
+  left: $x;
+  bottom: $y;
+  transform: translateX($dx) translateY($dy);
+}
+
+@mixin dimensions($w: 0px, $h: 0px) {
+  position: absolute;
+  width: $w;
+  height: $h;
+}
+
+@mixin rect($x: 0px, $y: 0px, $w: 0px, $h: 0px, $dx: 0px, $dy: 0px) {
+  @include translate($x, $y, $dx, $dy);
+  @include dimensions($w, $h);
+}
+
+@mixin rect-bottom($x: 0px, $y: 0px, $w: 0px, $h: 0px, $dx: 0px, $dy: 0px) {
+  @include translate-bottom($x, $y, $dx, $dy);
+  @include dimensions($w, $h);
+}
+
+// -------------------------------------------------------------------------------- 
+
+
+// Text Mixins
+// -------------------------------------------------------------------------------- 
+
+@mixin text-left($size: 1rem) {
+  font-size: $size;
+  text-align: left;
+}
+
+@mixin text-center($size: 1rem) {
+  font-size: $size;
+  text-align: center;
+}
+
+@mixin text-right($size: 1rem) {
+  font-size: $size;
+  text-align: right;
+}
+
+// -------------------------------------------------------------------------------- 
