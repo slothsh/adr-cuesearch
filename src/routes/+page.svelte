@@ -16,6 +16,7 @@ interface SearchRequest {
 }
 
 type ViewSlice = { start: number, end: number, length: number };
+type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
 
 let promptRect = $state(
     new Css.CssRect(
@@ -38,21 +39,23 @@ let expandButtonRect = $state(
     )
 );
 
-const MAX_VIEW_SIZE = 10;
+const MAX_VIEW_SIZE = 50;
 const TEXT_ENCODER = new TextEncoder();
 const MOCK_API = $state(new MockApi<Array<SearchResult>>());
 const PAGINATION_TOTAL_PAGES = 4;
+const SEARCH_DEBOUNCE_DELAY = 1000.0;
 
 let searchRequest: SearchRequest | null = $state(null);
 let tableBuffer: Promise<Array<SearchResult>> | null = $state(null);
-let tableData: Array<SearchResult> | null = $state(null);
 let viewSlice: ViewSlice | null = $state(null);
 let toggled = $state(false);
 let inputElement: HTMLFormElement | null = $state(null);
 let numbersListElement: HTMLUListElement | null = $state(null);
 let pageOffset = $state(0);
+let debounceSearchLast = $state(performance.now());
+let debounceId = $state(-1);
 
-function toggle() {
+function expandTable() {
     toggled = !toggled;
     if (toggled) {
         promptRect.position.y = 7.5;
@@ -82,7 +85,6 @@ function updatePages(): void {
         }
 
             pageOffset = Math.max(0, Math.floor(viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES)));
-            console.log(viewSlice.start, viewSlice.end, pageOffset, viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES));
     }
 }
 
@@ -115,8 +117,46 @@ function setPage(event: MouseEvent) {
             };
 
             pageOffset = Math.max(0, Math.floor(viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES)));
-            console.log(viewSlice.start, viewSlice.end, pageOffset, viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES));
         }
+    }
+}
+
+function cyclePage(event: MouseEvent): void {
+    if (event.target) {
+        const target = event.target as EventTarget & HTMLButtonElement;
+        const direction = target.getAttribute("data-direction");
+
+        // TODO: warn viewSlice == null
+        if (searchRequest && viewSlice && direction) {
+            if (direction === "forward" && viewSlice.end < searchRequest.results.length) {
+                viewSlice.start = viewSlice.end;
+                viewSlice.end = Math.min(viewSlice.end + MAX_VIEW_SIZE, searchRequest.results.length);
+            } else if (direction === "back" && viewSlice.start > 0) {
+                viewSlice.end = viewSlice.start;
+                viewSlice.start = Math.max(0, viewSlice.start - MAX_VIEW_SIZE);
+            }
+
+            viewSlice = {
+                start: viewSlice.start,
+                end: viewSlice.end,
+                get length() { return this.end - this.start; }
+            };
+
+            updatePages();
+        }
+    }
+}
+
+function cyclePagination(_: MouseEvent) {
+    if (searchRequest && viewSlice) {
+        pageOffset = Math.min(pageOffset + 1, Math.max(0, Math.floor(searchRequest.results.length / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES))));
+        viewSlice.start = pageOffset * PAGINATION_TOTAL_PAGES * MAX_VIEW_SIZE;
+        viewSlice.end = Math.min(viewSlice.start + MAX_VIEW_SIZE, searchRequest.results.length);
+        viewSlice = {
+            start: viewSlice.start,
+            end: viewSlice.end,
+            get length() { return this.end - this.start; }
+        };
     }
 }
 
@@ -127,10 +167,6 @@ function hex(hashBuffer: ArrayBuffer) {
         .join(""); 
 }
 
-let debounceSearchLast = $state(performance.now());
-let debounceId = $state(-1);
-const SEARCH_DEBOUNCE_DELAY = 1000.0;
-type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
 function handleSearch(event: Event) {
     if (debounceId !== -1) { clearTimeout(debounceId); }
 
@@ -176,47 +212,6 @@ function handleSearch(event: Event) {
             debounceSearchLast = debounceSearchNow;
         }
     }, SEARCH_DEBOUNCE_DELAY, event);
-}
-
-function cyclePage(event: MouseEvent): void {
-    if (event.target) {
-        const target = event.target as EventTarget & HTMLButtonElement;
-        const direction = target.getAttribute("data-direction");
-
-        // TODO: warn viewSlice == null
-        if (searchRequest && viewSlice && direction) {
-            if (direction === "forward" && viewSlice.end < searchRequest.results.length) {
-                viewSlice.start = viewSlice.end;
-                viewSlice.end = Math.min(viewSlice.end + MAX_VIEW_SIZE, searchRequest.results.length);
-            } else if (direction === "back" && viewSlice.start > 0) {
-                viewSlice.end = viewSlice.start;
-                viewSlice.start = Math.max(0, viewSlice.start - MAX_VIEW_SIZE);
-            }
-
-            viewSlice = {
-                start: viewSlice.start,
-                end: viewSlice.end,
-                get length() { return this.end - this.start; }
-            };
-
-            updatePages();
-        }
-    }
-}
-
-function cyclePagination(event: MouseEvent) {
-    if (searchRequest && viewSlice) {
-        pageOffset = Math.min(pageOffset + 1, Math.max(0, Math.floor(searchRequest.results.length / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES))));
-        viewSlice.start = pageOffset * PAGINATION_TOTAL_PAGES * MAX_VIEW_SIZE;
-        viewSlice.end = Math.min(viewSlice.start + MAX_VIEW_SIZE, searchRequest.results.length);
-        viewSlice = {
-            start: viewSlice.start,
-            end: viewSlice.end,
-            get length() { return this.end - this.start; }
-        };
-
-        console.log(viewSlice.start, viewSlice.end, pageOffset);
-    }
 }
 </script>
 
@@ -272,7 +267,7 @@ function cyclePagination(event: MouseEvent) {
         </div>
     </form>
 
-    <button id="expandButton" onclick={toggle}
+    <button id="expandButton" onclick={expandTable}
         style:--expand-x={expandButtonRect.x()}
         style:--expand-y={expandButtonRect.y()}
         style:--expand-w={expandButtonRect.w()}
@@ -305,7 +300,7 @@ function cyclePagination(event: MouseEvent) {
                         <tbody>
                             {#each { length: viewSlice.length } as _, rowIndex}
                                 <tr>
-                                {#each Object.values(searchRequest.results[rowIndex]) as col, m}
+                                {#each Object.values(searchRequest.results[rowIndex]) as _, m}
                                     <td>
                                         <p class="hover-text">{viewSlice.start}: {rowIndex * Object.keys(searchRequest.results[rowIndex]).length + m}</p>
                                     </td>
@@ -411,14 +406,6 @@ div.root {
 
         overflow: hidden;
         transition: height 500ms ease-in-out;
-
-        td > .blur-text {
-            position: absolute;
-            top: 0px;
-            left: 0px;
-            width: 100%;
-            height: 100%;
-        }
 
         > div:last-child {
             position: absolute;
