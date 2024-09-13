@@ -1,16 +1,8 @@
 <script lang="ts">
 import { Vec2 } from "$lib/vector.svelte";
 import { Css } from "$lib/css.svelte";
-import { MockApi } from "$lib/mockApi.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
 import { type Search, type SearchTable, Parse as ApiParse } from "$lib/api.svelte";
-
-interface SearchResult {
-    column1: string,
-    column2: string,
-    column3: string,
-    column4: string,
-}
 
 interface SearchRequest {
     hash: ArrayBuffer,
@@ -86,7 +78,7 @@ function updatePages(): void {
             }
         }
 
-            pageOffset = Math.max(0, Math.floor(viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES)));
+        pageOffset = Math.max(0, Math.floor(viewSlice.end / MAX_VIEW_SIZE / PAGINATION_TOTAL_PAGES - (1 / PAGINATION_TOTAL_PAGES)));
     }
 }
 
@@ -176,11 +168,10 @@ function handleSearch(event: Event) {
         const debounceSearchNow = performance.now();
         if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
             if (event.target?.value !== "") {
-                tableBuffer = API_CLIENT.get(ApiParse.search, { q: "search", amount: "100" } );
+                tableBuffer = API_CLIENT.get(ApiParse.search, { q: "search", amount: "500" } );
 
                 tableBuffer.then(async (results) => {
                     if (results === null) return;
-                    console.log(results);
 
                     const newEncoded = await window.crypto.subtle.digest("SHA-1", TEXT_ENCODER.encode(event.target?.value));
                     if (searchRequest !== null && hex(newEncoded) === hex(searchRequest.hash)) {
@@ -200,6 +191,8 @@ function handleSearch(event: Event) {
                         end: Math.min(viewSlice.start + MAX_VIEW_SIZE, searchRequest.results.length),
                         get length() { return this.end - this.start; }
                     };
+
+                    updatePages();
                 });
             }
 
@@ -294,7 +287,7 @@ function handleSearch(event: Event) {
                         <tbody>
                             {#each { length: viewSlice.length } as _, rowIndex}
                                 <tr>
-                                {#each Object.values(searchRequest.results[rowIndex + viewSlice.start]) as cell, _}
+                                {#each Object.values(searchRequest.results[rowIndex + viewSlice.start]) as cell}
                                     <td>
                                         <p class="hover-text">{cell}</p>
                                     </td>
