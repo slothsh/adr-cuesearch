@@ -2,6 +2,8 @@
 import { Vec2 } from "$lib/vector.svelte";
 import { Css } from "$lib/css.svelte";
 import { MockApi } from "$lib/mockApi.svelte";
+import { ApiClient } from "$lib/apiClient.svelte";
+import { type Search, type SearchTable, Parse as ApiParse } from "$lib/api.svelte";
 
 interface SearchResult {
     column1: string,
@@ -12,7 +14,7 @@ interface SearchResult {
 
 interface SearchRequest {
     hash: ArrayBuffer,
-    results: Array<SearchResult>,
+    results: SearchTable,
 }
 
 type ViewSlice = { start: number, end: number, length: number };
@@ -39,14 +41,14 @@ let expandButtonRect = $state(
     )
 );
 
-const MAX_VIEW_SIZE = 50;
+const MAX_VIEW_SIZE = 25;
 const TEXT_ENCODER = new TextEncoder();
-const MOCK_API = $state(new MockApi<Array<SearchResult>>());
+const API_CLIENT = $state(new ApiClient("http://localhost:6969"));
 const PAGINATION_TOTAL_PAGES = 4;
 const SEARCH_DEBOUNCE_DELAY = 1000.0;
 
 let searchRequest: SearchRequest | null = $state(null);
-let tableBuffer: Promise<Array<SearchResult>> | null = $state(null);
+let tableBuffer: Promise<Search | null> | null = $state(null);
 let viewSlice: ViewSlice | null = $state(null);
 let toggled = $state(false);
 let inputElement: HTMLFormElement | null = $state(null);
@@ -174,28 +176,20 @@ function handleSearch(event: Event) {
         const debounceSearchNow = performance.now();
         if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
             if (event.target?.value !== "") {
-                tableBuffer = MOCK_API.pushRequest(
-                    new Array(100)
-                        .fill(null)
-                        .map(() => {
-                            return {
-                                column1: "1",
-                                column2: "2",
-                                column3: "3",
-                                column4: "4",
-                            };
-                        })
-                , 1000);
+                tableBuffer = API_CLIENT.get(ApiParse.search, { q: "search", amount: "100" } );
 
                 tableBuffer.then(async (results) => {
+                    if (results === null) return;
+                    console.log(results);
+
                     const newEncoded = await window.crypto.subtle.digest("SHA-1", TEXT_ENCODER.encode(event.target?.value));
                     if (searchRequest !== null && hex(newEncoded) === hex(searchRequest.hash)) {
-                        searchRequest.results = searchRequest.results.concat(results);
+                        searchRequest.results = searchRequest.results.concat(results.data);
                     } else {
                         viewSlice = null;
                         searchRequest = {
                             hash: newEncoded,
-                            results: results,
+                            results: results.data,
                         };
                     }
 
@@ -272,7 +266,7 @@ function handleSearch(event: Event) {
         style:--expand-y={expandButtonRect.y()}
         style:--expand-w={expandButtonRect.w()}
         style:--expand-h={expandButtonRect.h()}>
-        Expand
+        {#if toggled}Collapse{:else}Expand{/if}
     </button>
     <div id="results"
         style:--table-x={resultsTableRect.x()}
@@ -300,9 +294,9 @@ function handleSearch(event: Event) {
                         <tbody>
                             {#each { length: viewSlice.length } as _, rowIndex}
                                 <tr>
-                                {#each Object.values(searchRequest.results[rowIndex]) as _, m}
+                                {#each Object.values(searchRequest.results[rowIndex + viewSlice.start]) as cell, _}
                                     <td>
-                                        <p class="hover-text">{viewSlice.start}: {rowIndex * Object.keys(searchRequest.results[rowIndex]).length + m}</p>
+                                        <p class="hover-text">{cell}</p>
                                     </td>
                                 {/each}
                                 </tr>
@@ -321,7 +315,7 @@ function handleSearch(event: Event) {
         <div>
             {#await tableBuffer then}
                 {#if searchRequest && viewSlice}
-                    <div>Showing {`${viewSlice.length}`} of {searchRequest.results.length} Results</div>
+                    <div>Showing {viewSlice.start}-{viewSlice.end} of {searchRequest.results.length} Results</div>
                     <div></div>
                     <div id="pagination">
                         <div id="controls">
