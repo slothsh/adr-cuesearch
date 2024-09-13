@@ -2,12 +2,7 @@
 import { Vec2 } from "$lib/vector.svelte";
 import { Css } from "$lib/css.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
-import { type Search, type SearchTable, Parse as ApiParse } from "$lib/api.svelte";
-
-interface SearchRequest {
-    hash: ArrayBuffer,
-    results: SearchTable,
-}
+import { type Search, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -35,15 +30,14 @@ let expandButtonRect = $state(
 
 const MAX_VIEW_SIZE = 25;
 const TEXT_ENCODER = new TextEncoder();
-const API_CLIENT = $state(new ApiClient("http://localhost:6969"));
+const SEARCH_CLIENT = $state(new ApiClient("http://localhost:6969/", "search"));
 const PAGINATION_TOTAL_PAGES = 4;
 const SEARCH_DEBOUNCE_DELAY = 1000.0;
 
-let searchRequest: SearchRequest | null = $state(null);
+let searchRequest: Search | null = $state(null);
 let tableBuffer: Promise<Search | null> | null = $state(null);
 let viewSlice: ViewSlice | null = $state(null);
 let toggled = $state(false);
-let inputElement: HTMLFormElement | null = $state(null);
 let numbersListElement: HTMLUListElement | null = $state(null);
 let pageOffset = $state(0);
 let debounceSearchLast = $state(performance.now());
@@ -154,7 +148,8 @@ function cyclePagination(_: MouseEvent) {
     }
 }
 
-function hex(hashBuffer: ArrayBuffer) {
+async function hex(value: string) {
+    const hashBuffer = await window.crypto.subtle.digest("SHA-1", TEXT_ENCODER.encode(value));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray
         .map((b) => b.toString(16).padStart(2, "0"))
@@ -164,41 +159,52 @@ function hex(hashBuffer: ArrayBuffer) {
 function handleSearch(event: Event) {
     if (debounceId !== -1) { clearTimeout(debounceId); }
 
-    debounceId = setTimeout((event: PromptEvent) => {
+    debounceId = setTimeout(async (event: PromptEvent) => {
         const debounceSearchNow = performance.now();
         if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
-            if (event.target?.value !== "") {
-                tableBuffer = API_CLIENT.get(ApiParse.search, { q: "search", amount: "500" } );
+            if (event.target && event.target.value !== "") {
+                const hash = await hex(event.target.value);
 
-                tableBuffer.then(async (results) => {
-                    if (results === null) return;
+                console.log(searchRequest, hash);
+                if (searchRequest && hash === searchRequest.hash) {
+                    console.warn("not implemented");
+                } else {
+                    tableBuffer = SEARCH_CLIENT.get(ApiParse.search, { amount: "100", q: (event.target) ? event.target.value : "" } );
+                    tableBuffer.then(async (payload) => {
+                        if (payload === null) return;
 
-                    const newEncoded = await window.crypto.subtle.digest("SHA-1", TEXT_ENCODER.encode(event.target?.value));
-                    if (searchRequest !== null && hex(newEncoded) === hex(searchRequest.hash)) {
-                        searchRequest.results = searchRequest.results.concat(results.data);
-                    } else {
-                        viewSlice = null;
-                        searchRequest = {
-                            hash: newEncoded,
-                            results: results.data,
+                        if (searchRequest !== null && payload.hash === searchRequest.hash) {
+                            // TODO: Fetch from cached
+                            console.warn("same query, ignoring...", payload.hash, searchRequest.hash);
+                        } else {
+                            viewSlice = null;
+                            searchRequest = {
+                                hash: payload.hash,
+                                results: payload.results,
+                            };
+                        }
+
+                        // TODO: dedup
+                        if (!viewSlice) { viewSlice = { start: 0, end: 0, get length() { return this.end - this.start; } }; }
+                        viewSlice = {
+                            start: Math.max(0, viewSlice.start),
+                            end: Math.min(viewSlice.start + MAX_VIEW_SIZE, searchRequest.results.length),
+                            get length() { return this.end - this.start; }
                         };
-                    }
 
-                    // TODO: dedup
-                    if (!viewSlice) { viewSlice = { start: 0, end: 0, get length() { return this.end - this.start; } }; }
-                    viewSlice = {
-                        start: Math.max(0, viewSlice.start),
-                        end: Math.min(viewSlice.start + MAX_VIEW_SIZE, searchRequest.results.length),
-                        get length() { return this.end - this.start; }
-                    };
+                        updatePages();
+                    });
+                }
 
-                    updatePages();
-                });
             }
 
             debounceSearchLast = debounceSearchNow;
         }
     }, SEARCH_DEBOUNCE_DELAY, event);
+}
+
+function shouldAnimateOnHover(text: string): boolean {
+    return true;
 }
 </script>
 
@@ -209,7 +215,7 @@ function handleSearch(event: Event) {
 </svelte:head>
 
 <div class="root">
-    <form action="" bind:this={inputElement}
+    <form action="javascript:void(0);"
         style:--input-x={promptRect.x()}
         style:--input-y={promptRect.y()}
         style:--input-w={promptRect.w()}
@@ -219,6 +225,7 @@ function handleSearch(event: Event) {
             id="inputPrompt"
             name="query"
             placeholder="Start typing to search..."
+            autocomplete="off"
             oninput={handleSearch}>
 
         <div id="parameters">
@@ -277,9 +284,9 @@ function handleSearch(event: Event) {
                     <table>
                         <thead>
                             <tr>
-                            {#each Object.keys(searchRequest.results[0]) as header}
+                            {#each searchRequest.results[0] as header, n}
                                 <th>
-                                    <div class="spacer">{header}</div>
+                                    <div class="spacer">{columnDisplayName(header.kind) ? columnDisplayName(header.kind) : `Column${n}`}</div>
                                 </th>
                             {/each}
                             </tr>
@@ -287,9 +294,9 @@ function handleSearch(event: Event) {
                         <tbody>
                             {#each { length: viewSlice.length } as _, rowIndex}
                                 <tr>
-                                {#each Object.values(searchRequest.results[rowIndex + viewSlice.start]) as cell}
+                                {#each searchRequest.results[rowIndex + viewSlice.start] as cell}
                                     <td>
-                                        <p class="hover-text">{cell}</p>
+                                        <p class:hover-text={() => shouldAnimateOnHover(cell.value)}>{cell.value}</p>
                                     </td>
                                 {/each}
                                 </tr>
@@ -473,7 +480,6 @@ div.root {
                     padding: 1rem;
                     text-overflow: ellipsis;
                     overflow: hidden;
-                    max-width: 1px;
                     mask-image: linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 1.0) 2%, rgba(255, 255, 255, 1.0) 80%, rgba(255, 255, 255, 0.0) 85%);
                     overflow: hidden;
 

@@ -1,17 +1,12 @@
-import { Parse } from "$lib/api.svelte";
-
-export const enum RestMethod {
-    GET,
-    POST,
-}
+import { Parse, type ParametersFor } from "$lib/api.svelte";
 
 export class ApiClient {
     constructor(urlBase: string, urlPath?: string) {
         this.baseUrl = new URL((urlPath) ? urlPath : "", urlBase);
     }
 
-    async get<T = void>(deserialize: Parse.Deserializer<T>, queryParameters?: Record<string, string>): Promise<T | null> {
-        const query = new URLSearchParams(queryParameters);
+    async get<T = void>(deserialize: Parse.Deserializer<T>, queryParameters?: ParametersFor<T>): Promise<T | null> {
+        const query = new URLSearchParams(<Record<string, string>>queryParameters);
         const url = new URL(`${this.baseUrl.toString()}?${query.toString()}`);
         this.lastRequest = url;
 

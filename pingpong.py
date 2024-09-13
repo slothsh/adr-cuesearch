@@ -3,6 +3,7 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 import json
+import hashlib
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -20,7 +21,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = { "message": "pong!" }
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
-        elif 'q' in query_params and query_params['q'][0] == "search":
+        elif 'q' in query_params:
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -33,17 +34,42 @@ class SimpleHandler(BaseHTTPRequestHandler):
             if 'amount' in query_params and query_params['amount'][0].isnumeric():
                 amount = int(query_params['amount'][0])
 
+            encoder = hashlib.sha1()
+            encoder.update(query_params['q'][0].encode())
+            hash = encoder.digest().hex()
+
             response = {
-                "data": []
+                "hash": hash,
+                "results": []
             }
 
             for n in range(amount):
-                response["data"].append({
-                    "column1": f"{n}",
-                    "column2": f"{n}",
-                    "column3": f"{n}",
-                    "column4": f"{n}",
-                })
+                response["results"].append([
+                    {
+                        "value": "PRODCO",
+                        "kind": 0,
+                    },
+                    {
+                        "value": "EP00",
+                        "kind": 1,
+                    },
+                    {
+                        "value": f"00:00:00:00",
+                        "kind": 2,
+                    },
+                    {
+                        "value": f"00:00:00:00",
+                        "kind": 3,
+                    },
+                    {
+                        "value": f"Speaker {n}",
+                        "kind": 4,
+                    },
+                    {
+                        "value": f"{hash}",
+                        "kind": 5,
+                    },
+                ])
 
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
         else:
