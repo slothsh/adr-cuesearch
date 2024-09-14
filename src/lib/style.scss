@@ -76,6 +76,10 @@
   }
 }
 
+:global(li) {
+  list-style: none;
+}
+
 // -------------------------------------------------------------------------------- 
 
 
@@ -148,6 +152,61 @@
 @mixin text-right($size: 1rem) {
   font-size: $size;
   text-align: right;
+}
+
+// -------------------------------------------------------------------------------- 
+
+
+// Style Mixins
+// -------------------------------------------------------------------------------- 
+
+@mixin button-style($border: 1px solid $blue-3, $radius: 8px) {
+  background-color: $blue-1;
+  border: 1px solid $border;
+  border-radius: $radius;
+
+  &:global([opened]) {
+    color: $blue-4;
+    background-color: $blue-2;
+  }
+
+  &:global([opened] *) {
+    color: $blue-4;
+    background-color: $blue-2;
+  }
+
+  &:hover {
+    cursor: pointer;
+
+    > * {
+      cursor: pointer;
+      background-color: unset;
+    }
+
+    color: $blue-4;
+    background-color: $blue-2;
+    border-radius: $radius;
+  }
+}
+
+// -------------------------------------------------------------------------------- 
+
+
+// Animation Keyframes
+// -------------------------------------------------------------------------------- 
+
+@mixin keyframes-fade ($from: 0.0, $to: 1.0) {
+  @keyframes fade {
+    from { opacity: $from; }
+    to { opacity: $to; }
+  }
+}
+
+@mixin keyframes-slide ($from: -100%, $to: 0%) {
+  @keyframes slide {
+    from { transform: translateY($from); }
+    to { transform: translateY(0%); }
+  }
 }
 
 // -------------------------------------------------------------------------------- 

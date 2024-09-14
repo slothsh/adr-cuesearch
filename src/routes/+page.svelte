@@ -3,6 +3,10 @@ import { Vec2 } from "$lib/vector.svelte";
 import { Css } from "$lib/css.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
 import { type Search, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
+import DropdownMenu from "$lib/DropdownMenu.svelte";
+import { type Props as DropdownMenuProps, MenuKind } from "$lib/DropdownMenu.svelte";
+import { DropdownMenuId } from "$lib/app.svelte";
+import { ComponentManager } from "$lib/componentManager.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -165,7 +169,6 @@ function handleSearch(event: Event) {
             if (event.target && event.target.value !== "") {
                 const hash = await hex(event.target.value);
 
-                console.log(searchRequest, hash);
                 if (searchRequest && hash === searchRequest.hash) {
                     console.warn("not implemented");
                 } else {
@@ -206,6 +209,101 @@ function handleSearch(event: Event) {
 function shouldAnimateOnHover(text: string): boolean {
     return true;
 }
+
+function once<E extends Event>(fn: ((event: E) => void) | null) {
+    return function (event: Event): void {
+        // @ts-ignore
+        if (fn) fn.call(this, event);
+        fn = null;
+    }
+}
+
+function preventDefault<E extends Event>(fn: (event: E) => void) {
+    return function (event: Event) {
+        event.preventDefault();
+        // @ts-ignore
+        fn.call(this, event);
+    }
+}
+
+let menuManager: ComponentManager<HTMLElement, DropdownMenuProps> = $state(new ComponentManager());
+$effect(() => {
+    const elements = document.querySelectorAll("[data-id]");
+    for (const element of elements) {
+        if (element) {
+            element.addEventListener("toggleMenu", toggleDropdownMenu);
+            menuManager.add(element as HTMLElement, DropdownMenu);
+        }
+    }
+});
+
+function toggleDropdownMenu(event: Event) {
+    const target = event.target as HTMLElement;
+    if (target.hasAttribute("opened")) {
+        menuManager.unmount(target);
+        target.removeAttribute("opened");
+    } else {
+        const targetRect = target.getBoundingClientRect();
+        const id = parseInt(target.getAttribute("data-id")!);
+        target.setAttribute("opened", "");
+
+        menuManager.mount(
+            target,
+            {
+                id: id,
+                rect: new Css.CssRect(
+                    {
+                        v: new Vec2(targetRect.x - (160 - targetRect.width/2), targetRect.y + targetRect.height),
+                        unitX: Css.UnitKind.PIXEL,
+                        unitY: Css.UnitKind.PIXEL,
+                    },
+                    {
+                        v: new Vec2(320, 320),
+                        unitH: Css.UnitKind.PIXEL,
+                        unitW: Css.UnitKind.PIXEL,
+                    }
+                ),
+
+                kind: MenuKind.SELECT,
+
+                data: []
+            }
+        );
+    }
+}
+
+function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLInputElement }) {
+    const target = event.target.closest("[data-id]") as HTMLElement;
+    if (target) {
+        menuManager.dispatchEvent("toggleMenu", target);
+    }
+}
+
+function handleDocumentClick(event: Event): void {
+    menuManager.unmountIf((element) => {
+        const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
+        const targetDataId = element.getAttribute("data-id");
+
+        if (eventDataId && targetDataId) {
+            if (eventDataId !== targetDataId) {
+                element.removeAttribute("opened");
+                return true;
+            } else {
+                element.setAttribute("opened", "");
+                return false;
+            }
+        }
+
+        element.removeAttribute("opened");
+        return true;
+    });
+}
+
+function handleWindowResize(event: Event): void {
+    menuManager.unmountAll();
+}
+
+let hello: HTMLElement | null = $state(null);
 </script>
 
 <svelte:head>
@@ -213,6 +311,9 @@ function shouldAnimateOnHover(text: string): boolean {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
 </svelte:head>
+
+<svelte:document onclick={handleDocumentClick}></svelte:document>
+<svelte:window onresize={handleWindowResize}></svelte:window>
 
 <div class="root">
     <form action="javascript:void(0);"
@@ -230,31 +331,31 @@ function shouldAnimateOnHover(text: string): boolean {
 
         <div id="parameters">
             <h2 style="align-self: center;">Search Parameters</h2>
-            <div id="projects">
+            <div id="projects" data-id={DropdownMenuId.PROJECT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
                 Projects:
-                <select name="projects" id="paramProject">
+                <select name="projects" id="paramProject" onmousedown={preventDefault(() => {})}>
                     <option value="all">all</option>
                 </select>
             </div>
-            <div id="segments">
+            <div id="segments" data-id={DropdownMenuId.SEGMENT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
                 Segments:
-                <select name="segments" id="paramSegment">
+                <select name="segments" id="paramSegment" onmousedown={preventDefault(() => {})}>
                     <option value="all">all</option>
                 </select>
             </div>
-            <div id="speakers">
+            <div id="speakers" data-id={DropdownMenuId.SPEAKER_SELECT} onclick={preventDefault(handleDropDownMenu)}>
                 Speakers:
-                <select name="speakers" id="paramSpeakers">
+                <select name="speakers" id="paramSpeakers" onmousedown={preventDefault(() => {})}>
                     <option value="all">all</option>
                 </select>
             </div>
-            <div id="timeRange">
+            <div data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange" onclick={preventDefault(handleDropDownMenu)}>
                 Time Range:
-                <select name="timeRangeStart" id="paramTimeRangeStart">
+                <select name="timeRangeStart" id="paramTimeRangeStart" onmousedown={preventDefault(() => {})}>
                     <option value="all">00:00:00:00</option>
                 </select>
                 to
-                <select name="timeRangeEnd" id="paramTimeRangeEnd">
+                <select name="timeRangeEnd" id="paramTimeRangeEnd" onmousedown={preventDefault(() => {})}>
                     <option value="all">00:00:00:00</option>
                 </select>
             </div>
@@ -370,6 +471,12 @@ div.root {
             width: 100%;
             margin-top: 1rem;
             > div, > :first-child { color: $blue-3; }
+
+            > div {
+                @include button-style(1px solid transparent);
+                padding: 0.25rem 0rem 0.25rem 0.5rem;
+            }
+
         }
     }
 
@@ -434,11 +541,8 @@ div.root {
                 border-collapse: collapse;
 
                 & {
-                    @keyframes fade-in {
-                        0% { opacity: 0.0; }
-                        100% { opacity: 1.0; }
-                    }
-                    animation: fade-in 500ms ease-out 1;
+                    @include keyframes-fade();
+                    animation: fade 500ms ease-out 1;
                 }
 
 
@@ -540,6 +644,5 @@ div.root {
             }
         }
     }
-
 }
 </style>
