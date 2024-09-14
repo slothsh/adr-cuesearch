@@ -5,11 +5,18 @@ export const enum MenuKind {
     SELECT = 0,
 }
 
+export type InputChangedEvent = Event & { target: EventTarget & HTMLInputElement | null, currentTarget: EventTarget & HTMLInputElement };
+
+export interface SearchParameters {
+    data?: Set<string>,
+    oninput?: (event: InputChangedEvent, data?: Set<string>) => void,
+}
+
 export type Props = {
     id: DropdownMenuId,
     rect: Css.CssRect,
-    kind?: MenuKind,
-    data?: Array<string>,
+    kind: MenuKind,
+    search?: SearchParameters,
 };
 </script>
 
@@ -19,16 +26,25 @@ import { DropdownMenuId } from "./app.svelte";
 let {
     id,
     rect,
-    kind = MenuKind.SELECT,
-    data = [],
+    kind,
+    search = undefined,
 }: Props = $props();
 </script>
 
-{#snippet select(data: Array<string>)}
+{#snippet select(parameters?: SearchParameters)}
+    <div class="select-search">
+        <input
+            type="text"
+            autocomplete="off"
+            oninput={(event) => { if (parameters?.oninput) parameters.oninput(event as InputChangedEvent, parameters.data); }}>
+    </div>
+
     <ul class="select-list">
-    {#each data as msg}
-        <li>{msg}</li>
-    {/each}
+    {#if parameters?.data}
+        {#each parameters.data as msg}
+            <li>{msg}</li>
+        {/each}
+    {/if}
     </ul>
 {/snippet}
 
@@ -39,7 +55,7 @@ let {
     style:--h={rect.h()}>
     <div class="view">
         {#if kind === MenuKind.SELECT}
-            {@render select(data)}
+            {@render select(search)}
         {/if}
     </div>
 </div>
@@ -69,6 +85,23 @@ div.root {
         border-bottom: 1px solid $blue-3;
     }
 
+    :global(.select-search) {
+        position: sticky;
+        top: 0px;
+        padding: 0.75rem;
+        background-color: $blue-1;
+        border-bottom: 1px solid $blue-3;
+    }
+
+    :global(.select-search input) {
+        @include text-left();
+        width: 100%;
+        border: 1px solid $blue-3;
+        border-radius: 8px;
+        padding: 0.5rem;
+        background-color: $blue-2;
+    }
+
     > .view {
         width: 100%;
         height: 100%;
@@ -81,8 +114,8 @@ div.root {
         @include keyframes-fade();
         @include keyframes-slide();
 
-        animation: fade 500ms ease-in-out 1,
-                   slide 250ms ease-in-out 1;
+        // animation: fade 500ms ease-in-out 1,
+        //            slide 250ms ease-in-out 1;
     }
 }
 </style>

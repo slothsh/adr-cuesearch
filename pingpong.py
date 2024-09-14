@@ -10,7 +10,6 @@ class SimpleHandler(BaseHTTPRequestHandler):
         parsed_url = urlparse(self.path)
         query_params = parse_qs(parsed_url.query)
 
-        # Check if 'q=ping' is in the query string
         if 'q' in query_params and query_params['q'][0] == 'ping':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -70,6 +69,32 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         "kind": 5,
                     },
                 ])
+
+            self.wfile.write(bytes(json.dumps(response), "utf-8"))
+        elif 'projects' in query_params:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Origin', '*')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Credentials', 'true')  # Adjust for your specific origin policy
+            self.end_headers()
+            
+            amount = 5
+            if 'amount' in query_params and query_params['amount'][0].isnumeric():
+                amount = int(query_params['amount'][0])
+
+            encoder = hashlib.sha1()
+            encoder.update(query_params['projects'][0].encode())
+            hash = encoder.digest().hex()
+
+            response = {
+                "hash": hash,
+                "results": []
+            }
+
+            for n in range(amount):
+                response["results"].append(f"project {n}")
 
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
         else:

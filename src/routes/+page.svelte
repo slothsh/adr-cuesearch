@@ -2,11 +2,12 @@
 import { Vec2 } from "$lib/vector.svelte";
 import { Css } from "$lib/css.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
-import { type Search, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
+import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 import DropdownMenu from "$lib/DropdownMenu.svelte";
-import { type Props as DropdownMenuProps, MenuKind } from "$lib/DropdownMenu.svelte";
+import { type Props as DropdownMenuProps, type InputChangedEvent, MenuKind } from "$lib/DropdownMenu.svelte";
 import { DropdownMenuId } from "$lib/app.svelte";
 import { ComponentManager } from "$lib/componentManager.svelte";
+import { tick } from "svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -46,6 +47,8 @@ let numbersListElement: HTMLUListElement | null = $state(null);
 let pageOffset = $state(0);
 let debounceSearchLast = $state(performance.now());
 let debounceId = $state(-1);
+let projectsRequest: Projects | null = $state(null);
+let projectsBuffer: Promise<Projects | null> | null = $state(null);
 
 function expandTable() {
     toggled = !toggled;
@@ -247,28 +250,73 @@ function toggleDropdownMenu(event: Event) {
         const id = parseInt(target.getAttribute("data-id")!);
         target.setAttribute("opened", "");
 
-        menuManager.mount(
-            target,
-            {
-                id: id,
-                rect: new Css.CssRect(
-                    {
-                        v: new Vec2(targetRect.x - (160 - targetRect.width/2), targetRect.y + targetRect.height),
-                        unitX: Css.UnitKind.PIXEL,
-                        unitY: Css.UnitKind.PIXEL,
+        let targetProps: DropdownMenuProps = {
+            id: id,
+            kind: MenuKind.SELECT,
+            rect: new Css.CssRect(
+                {
+                    v: new Vec2(targetRect.x - (160 - targetRect.width/2), targetRect.y + targetRect.height),
+                    unitX: Css.UnitKind.PIXEL,
+                    unitY: Css.UnitKind.PIXEL,
+                },
+                {
+                    v: new Vec2(320, 320),
+                    unitH: Css.UnitKind.PIXEL,
+                    unitW: Css.UnitKind.PIXEL,
+                },
+            ),
+        };
+
+        switch (id) {
+            case DropdownMenuId.PROJECT_SELECT: {
+                targetProps.search = {
+                    oninput: (event: Event, data: any) => {
+                        if (debounceId !== -1) { clearTimeout(debounceId); }
+
+                        debounceId = setTimeout(async (event: InputChangedEvent) => {
+                            const debounceSearchNow = performance.now();
+                            if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
+                                if (event.target && event.target.value !== "") {
+                                    const hash = await hex(event.target.value);
+
+                                    if (projectsRequest && hash === projectsRequest.hash) {
+                                        console.warn("not implemented");
+                                    } else {
+                                        projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { projects: event.target.value } );
+
+                                        projectsBuffer.then(async (payload) => {
+                                            if (payload === null) return;
+
+                                            if (projectsRequest !== null && payload.hash === projectsRequest.hash) {
+                                                // TODO: Fetch from cached
+                                                console.warn("same query, ignoring...", payload.hash, projectsRequest.hash);
+                                            } else {
+                                                projectsRequest = {
+                                                    hash: payload.hash,
+                                                    results: payload.results,
+                                                };
+                                            }
+                                        });
+                                    }
+                                }
+                                debounceSearchLast = debounceSearchNow;
+                            }
+                        }, SEARCH_DEBOUNCE_DELAY, event);
                     },
-                    {
-                        v: new Vec2(320, 320),
-                        unitH: Css.UnitKind.PIXEL,
-                        unitW: Css.UnitKind.PIXEL,
-                    }
-                ),
+                    data: projectsRequest?.results,
+                };
+            } break;
 
-                kind: MenuKind.SELECT,
+            case DropdownMenuId.SEGMENT_SELECT:
+            case DropdownMenuId.SPEAKER_SELECT:
+            case DropdownMenuId.TIMERANGE_SELECT: { console.warn("not implemented"); } break;
 
-                data: []
-            }
-        );
+            default: {
+                console.warn(`unknown dropdown menu with ID ${id}`);
+            } break;
+        }
+
+        menuManager.mount(target, targetProps as DropdownMenuProps);
     }
 }
 
@@ -300,7 +348,9 @@ function handleDocumentClick(event: Event): void {
 }
 
 function handleWindowResize(event: Event): void {
-    menuManager.unmountAll();
+    menuManager.unmountAll((element) => {
+        element.removeAttribute("opened");
+    });
 }
 
 let hello: HTMLElement | null = $state(null);

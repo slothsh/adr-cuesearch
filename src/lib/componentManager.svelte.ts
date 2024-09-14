@@ -1,5 +1,5 @@
 import { Vec2 } from "./vector.svelte";
-import { mount, unmount, type Component as SvelteComponentInternal } from "svelte";
+import { mount, unmount, hydrate, type Component as SvelteComponentInternal } from "svelte";
 
 type Props<P> = Record<string, any> & P;
 type Exports = Record<string, any>;
@@ -37,8 +37,9 @@ export class ComponentManager<E extends HTMLElement, P, C = SvelteComponent<P>> 
         }
     }
 
-    unmountAll(): void {
+    unmountAll(callback: (element: E) => void): void {
         for (const [element, instance] of this.instances) {
+            if (callback) callback(element);
             unmount(instance);
             this.instances.delete(element);
         }
