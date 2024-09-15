@@ -9,6 +9,7 @@ import { onMount } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 import { type SearchQueryParameters } from "$lib/api.svelte";
+import CheckBox from "$lib/CheckBox.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -51,15 +52,17 @@ let debounceSearchLast = $state(performance.now());
 let debounceId = $state(-1);
 let projectsRequest: Projects = $state({ hash: "", results: new SvelteSet<string>() });
 let projectsBuffer: Promise<Projects | null> | null = $state(null);
+let pinnedProjects = $state(new SvelteSet<string>());
 
-let selectedProjects = $state(new Set<string>());
 function handleSelectedProject(event: Event) {
     const inputEvent =  event as Event & { currentTarget: EventTarget & HTMLInputElement, target: EventTarget & HTMLInputElement };
-    if (inputEvent.target) {
-        if (inputEvent.target.checked) {
-            selectedProjects.add(inputEvent.target.value);
-        } else {
-            selectedProjects.delete(inputEvent.target.value);
+    const buttonElement = inputEvent.target.querySelector("[data-value]");
+    if (buttonElement) {
+        const value = buttonElement.getAttribute("data-value");
+        if (value && pinnedProjects.has(value)) {
+            pinnedProjects.delete(value);
+        } else if (value) {
+            pinnedProjects.add(value);
         }
     }
 }
@@ -202,7 +205,7 @@ function handleSearch(event: Event) {
                     const queryParameters: SearchQueryParameters = {
                         amount: "100",
                         line: (event.target) ? event.target.value : "",
-                        projects: Array.from(selectedProjects),
+                        projects: Array.from(pinnedProjects),
                     };
 
                     console.log(queryParameters);
@@ -463,10 +466,12 @@ function handleWindowResize(_: Event): void {
 
 <MenuManagerView manager={MENU_MANAGER}>
     {#snippet searchSelect(menu)}
-        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} oninput={handleProjectSearch}>
+        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} onclick={handleSelectedProject} oninput={handleProjectSearch}>
             {#snippet listItem(value: string)}
-                <input type="checkbox" checked={selectedProjects.has(value)} value="{value}" oninput={handleSelectedProject}>
-                <big>{value}</big>
+                <div class="checkbox">
+                    <CheckBox checked={pinnedProjects.has(value)} {value} oninput={handleSelectedProject} />
+                    <big>{value}</big>
+                </div>
             {/snippet}
         </MenuSearchSelect>
     {/snippet}
@@ -474,6 +479,11 @@ function handleWindowResize(_: Event): void {
 
 <style lang="scss">
 @import "$lib/style.scss";
+
+div.checkbox {
+    @include flex(start, center, row);
+    gap: 1rem;
+}
 
 div.root {
     background-color: $blue-1;

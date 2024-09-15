@@ -8,6 +8,7 @@ export interface Props {
     target: Css.CssRect,
     data?: SvelteSet<string>,
     oninput?: (event: Event) => void,
+    onclick?: (event: Event) => void,
     listItem: Snippet<[string]>,
 }
 </script>
@@ -20,6 +21,7 @@ let {
     target,
     data,
     oninput = (event: Event) => {},
+    onclick = (event: Event) => {},
     listItem,
 }: Props = $props();
 </script>
@@ -41,7 +43,7 @@ let {
             <ul class="select-list">
             {#if data}
                 {#each data as value}
-                    <li>
+                    <li {onclick}>
                         {#if listItem}
                             {@render listItem(value)}
                         {:else}
@@ -101,6 +103,10 @@ div.root {
         box-shadow: 0px 0px 16px rgba(0, 0, 0, 0.5);
         border-radius: 8px;
         overflow-y: auto;
+
+        li {
+            cursor: pointer;
+        }
 
         @include keyframes-fade();
         @include keyframes-slide();
