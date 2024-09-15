@@ -1,74 +1,48 @@
 <script module lang="ts">
 import { Css } from "./css.svelte";
 
-export const enum MenuKind {
-    SELECT = 0,
-}
-
-export type InputChangedEvent = Event & { target: EventTarget & HTMLInputElement | null, currentTarget: EventTarget & HTMLInputElement };
-
-export interface SearchParameters {
-    data?: Set<string>,
-    oninput?: (event: InputChangedEvent, data?: Set<string>) => void,
-}
-
 export interface Props {
-    id: DropdownMenuId,
-    rect: Css.CssRect,
-    kind: MenuKind,
-    search?: SearchParameters,
-};
+    target: Css.CssRect,
+    data?: Set<string>,
+    oninput?: (event: Event) => void,
+}
 </script>
 
 <script lang="ts">
-import { DropdownMenuId } from "./app.svelte";
+import Rect from "./Rectangle.svelte";
 
 let {
-    id,
-    rect,
-    kind,
-    search = undefined,
+    target,
+    data = new Set(),
+    oninput = (event: Event) => {},
 }: Props = $props();
 </script>
 
-{#snippet select(parameters?: SearchParameters)}
-    <div class="select-search">
-        <input
-            type="text"
-            autocomplete="off"
-            oninput={(event) => { if (parameters?.oninput) parameters.oninput(event as InputChangedEvent, parameters.data); }}>
-    </div>
+<Rect {target}>
+    <div class="root">
+        <div class="view">
+            <div class="select-search">
+                <input
+                    type="text"
+                    autocomplete="off"
+                    oninput={(event) => { if (oninput) oninput(event); }}>
+            </div>
 
-    <ul class="select-list">
-    {#if parameters?.data}
-        {#each parameters.data as msg}
-            <li>{msg}</li>
-        {/each}
-    {/if}
-    </ul>
-{/snippet}
-
-<div data-id={id} class="root"
-    style:--x={rect.x()}
-    style:--y={rect.y()}
-    style:--w={rect.w()}
-    style:--h={rect.h()}>
-    <div class="view">
-        {#if kind === MenuKind.SELECT}
-            {@render select(search)}
-        {/if}
+            <ul class="select-list">
+            {#if data}
+                {#each data as msg}
+                    <li>{msg}</li>
+                {/each}
+            {/if}
+            </ul>
+        </div>
     </div>
-</div>
+</Rect>
 
 <style lang="scss">
 @import "$lib/style.scss";
 
 div.root {
-    position: absolute;
-    left: var(--x);
-    top: var(--y);
-    width: var(--w);
-    height: var(--h);
     overflow: hidden;
     padding: 1rem;
     z-index: 1000;

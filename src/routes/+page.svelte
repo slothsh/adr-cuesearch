@@ -4,10 +4,12 @@ import { Css } from "$lib/css.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
 import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 import DropdownMenu from "$lib/DropdownMenu.svelte";
+import MenuManagerView, { MenuManager, type Menu, MenuKind as MenuManagerKind } from "$lib/MenuManager.svelte";
 import { type Props as DropdownMenuProps, type InputChangedEvent, MenuKind } from "$lib/DropdownMenu.svelte";
 import { DropdownMenuId } from "$lib/app.svelte";
 import { ComponentManager } from "$lib/componentManager.svelte";
-import { tick } from "svelte";
+import MenuSearchSelect from "$lib/MenuSearchSelect.svelte";
+import Rect from "$lib/Rectangle.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -229,6 +231,7 @@ function preventDefault<E extends Event>(fn: (event: E) => void) {
     }
 }
 
+let MENU_MANAGER: MenuManager = new MenuManager();
 let menuManager: ComponentManager<HTMLElement, DropdownMenuProps> = $state(new ComponentManager());
 $effect(() => {
     const elements = document.querySelectorAll("[data-id]");
@@ -236,6 +239,7 @@ $effect(() => {
         if (element) {
             element.addEventListener("toggleMenu", toggleDropdownMenu);
             menuManager.add(element as HTMLElement, DropdownMenu);
+            MENU_MANAGER.add(element as HTMLElement, { kind: MenuManagerKind.SEARCH_SELECT, enabled: false, rect: new Css.CssRect() });
         }
     }
 });
@@ -324,11 +328,30 @@ function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLInpu
     const target = event.target.closest("[data-id]") as HTMLElement;
     if (target) {
         menuManager.dispatchEvent("toggleMenu", target);
+        MENU_MANAGER.toggleGreedy(target);
     }
 }
 
 function handleDocumentClick(event: Event): void {
     menuManager.unmountIf((element) => {
+        const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
+        const targetDataId = element.getAttribute("data-id");
+
+        if (eventDataId && targetDataId) {
+            if (eventDataId !== targetDataId) {
+                element.removeAttribute("opened");
+                return true;
+            } else {
+                element.setAttribute("opened", "");
+                return false;
+            }
+        }
+
+        element.removeAttribute("opened");
+        return true;
+    });
+
+    MENU_MANAGER.disableIf((element, menu) => {
         const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
         const targetDataId = element.getAttribute("data-id");
 
@@ -352,8 +375,6 @@ function handleWindowResize(event: Event): void {
         element.removeAttribute("opened");
     });
 }
-
-let hello: HTMLElement | null = $state(null);
 </script>
 
 <svelte:head>
@@ -494,6 +515,12 @@ let hello: HTMLElement | null = $state(null);
         </div>
     </div>
 </div>
+
+<MenuManagerView manager={MENU_MANAGER}>
+    {#snippet searchSelect(menu, data)}
+        <MenuSearchSelect target={menu.rect} data={data}></MenuSearchSelect>
+    {/snippet}
+</MenuManagerView>
 
 <style lang="scss">
 @import "$lib/style.scss";

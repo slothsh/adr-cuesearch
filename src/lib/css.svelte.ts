@@ -1,3 +1,4 @@
+import { type AppendUnion } from "$lib/reflection";
 import { Vec2 } from "./vector.svelte";
 
 export namespace Css {
@@ -132,6 +133,41 @@ export namespace Css {
         return `${value}`;
     }
 
+export function toKebabCase(camelCase: string): string {
+    return (camelCase[0].toLowerCase() + camelCase.slice(1))
+        .replace(/([A-Z])/g, (match) => `-${match.toLowerCase()}`);
+}
+
+export interface CssStyleConfig extends Partial<AppendUnion<CSSStyleDeclaration, Unit>> {
+    [key: string]: any,
+}
+
+export function cssStyleString(styles: CssStyleConfig): string {
+    let styleString = "";
+    for (const key of Object.keys(styles)) {
+        // @ts-ignore
+        const styleValue = styles[key];
+        const styleKey = (!key.startsWith("--"))
+            ? toKebabCase(key)
+            : key;
+
+        if (typeof styleValue === "string") {
+            styleString += `${styleKey}: ${styleValue};`;
+        } else if (typeof styleValue === "number") {
+            styleString += `${styleKey}: ${styleValue.toString()};`;
+        } else if (typeof styleValue === "boolean") {
+            styleString += `${styleKey}: ${styleValue.toString()};`;
+        } else if (styleValue.constructor.name === "CssUnitValue") {
+            styleString += `${styleKey}: ${styleValue.toString()};`;
+        } else if (typeof styleValue === "object" && styleValue !== null) {
+            styleString += cssStyleString(styleValue);
+        } else {
+            return "";
+        }
+    }
+
+    return styleString;
+}
 
     export class CssVec2 {
         constructor(v: Vec2, unitX: Css.UnitKind = Css.UnitKind.PIXEL, unitY: Css.UnitKind = Css.UnitKind.PIXEL) {
@@ -152,14 +188,22 @@ export namespace Css {
     type CssRectDimensionsOptions = { v: Vec2, unitW: UnitKind, unitH: UnitKind };
 
     export class CssRect {
-        constructor(position: CssRectPositionOptions, dimensions: CssRectDimensionsOptions) {
-            this.position = position.v;
-            this.unitX = position.unitX;
-            this.unitY = position.unitY;
+        constructor(position?: CssRectPositionOptions, dimensions?: CssRectDimensionsOptions) {
+            if (position) {
+                this.position = position.v;
+                this.unitX = position.unitX;
+                this.unitY = position.unitY;
+            } else {
+                this.position = new Vec2();
+            }
 
-            this.dimensions = dimensions.v;
-            this.unitW = dimensions.unitW;
-            this.unitH = dimensions.unitH;
+            if (dimensions) {
+                this.dimensions = dimensions.v;
+                this.unitW = dimensions.unitW;
+                this.unitH = dimensions.unitH;
+            } else {
+                this.dimensions = new Vec2();
+            }
         }
 
         y(): string { return new Css.Unit(this.position.y, this.unitY).toString(); }
