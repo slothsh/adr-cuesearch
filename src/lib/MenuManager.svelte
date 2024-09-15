@@ -2,16 +2,19 @@
 import { type Snippet } from "svelte";
 import { Css } from "./css.svelte";
 import { Vec2 } from "./vector.svelte";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 export interface Props {
     manager: MenuManager,
-    searchSelect: Snippet<[Menu, Set<string>]>,
+    searchSelect: Snippet<[Menu]>,
 }
 
 export interface Menu {
     kind: MenuKind,
     rect: Css.CssRect,
     enabled: boolean,
+    id: number,
+    data?: SvelteSet<string>,
 }
 
 export const enum MenuKind {
@@ -20,10 +23,10 @@ export const enum MenuKind {
 }
 
 export class MenuManager {
-    constructor(menus?: Set<HTMLElement>) {
+    constructor(menus?: SvelteSet<HTMLElement>) {
         if (menus) {
             for (const menu of menus) {
-                this.menus.set(menu, { rect: new Css.CssRect(), enabled: false, kind: MenuKind.EMPTY });
+                this.menus.set(menu, { id: -1, rect: new Css.CssRect(), enabled: false, kind: MenuKind.EMPTY });
             }
         }
     }
@@ -36,7 +39,7 @@ export class MenuManager {
         if (menu) {
             this.menus.set(element, menu);
         } else {
-            this.menus.set(element, { kind: MenuKind.EMPTY, enabled: false, rect: new Css.CssRect() });
+            this.menus.set(element, { id: -1, kind: MenuKind.EMPTY, enabled: false, rect: new Css.CssRect() });
         }
     }
 
@@ -56,33 +59,26 @@ export class MenuManager {
     enable(element: HTMLElement): void {
         const menu = this.menus.get(element);
         if (menu) {
-            const elementRect = element.getBoundingClientRect();
-            menu.enabled = true;
-
-            // TODO: default menu sizes
-            menu.rect = new Css.CssRect(
-                {
-                    v: new Vec2(elementRect.x - (160 - elementRect.width/2), elementRect.y + elementRect.height),
-                    unitX: Css.UnitKind.PIXEL,
-                    unitY: Css.UnitKind.PIXEL,
-                },
-                {
-                    v: new Vec2(320, 320),
-                    unitH: Css.UnitKind.PIXEL,
-                    unitW: Css.UnitKind.PIXEL,
-                },
-            );
-
-            this.tick();
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: true,
+                rect: this.defaultRect(element),
+                data: menu.data,
+            });
         }
     }
 
     toggleGreedy(element: HTMLElement): void {
         const menu = this.menus.get(element);
         if (menu) {
-            menu.enabled = !menu.enabled;
-            this.updateRect(element, menu);
-            this.tick();
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: !menu.enabled,
+                rect: this.defaultRect(element),
+                data: menu.data,
+            });
         }
 
         this.disableIf((otherElement) => element !== otherElement); 
@@ -91,7 +87,13 @@ export class MenuManager {
     enableAll(callback?: (element: HTMLElement, menu: Menu) => void): void {
         for (const [element, menu] of this.menus) {
             if (callback) callback(element, menu);
-            menu.enabled = true;
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: true,
+                rect: this.defaultRect(element),
+                data: menu.data,
+            });
         }
     }
 
@@ -105,20 +107,40 @@ export class MenuManager {
             }
         }
 
-        for (const [_, menu] of mustEnable) {
-            menu.enabled = true;
+        for (const [enableElement, menu] of mustEnable) {
+            this.menus.set(enableElement, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: true,
+                rect: this.defaultRect(enableElement),
+                data: menu.data,
+            });
         }
     }
 
     disable(element: HTMLElement): void {
         const menu = this.menus.get(element);
-        if (menu) { menu.enabled = false; }
+        if (menu) {
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: false,
+                rect: this.defaultRect(element),
+                data: menu.data,
+            });
+        }
     }
 
     disableAll(callback?: (element: HTMLElement, menu: Menu) => void): void {
         for (const [element, menu] of this.menus) {
             if (callback) callback(element, menu);
-            menu.enabled = false;
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: false,
+                rect: this.defaultRect(element),
+                data: menu.data,
+            });
         }
     }
 
@@ -132,43 +154,34 @@ export class MenuManager {
             }
         }
 
-        for (const [element, menu] of mustDisable) {
+        for (const [disableElement, menu] of mustDisable) {
             menu.enabled = false;
+            this.menus.set(disableElement, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: false,
+                rect: this.defaultRect(disableElement),
+                data: menu.data,
+            });
         }
-
-        this.tick();
     }
 
-    setRect(element: HTMLElement, rect: Css.CssRect) {
-        this.setPosition(element, new Css.CssVec2(rect.position, rect.unitX, rect.unitY));
-        this.setDimensions(element, new Css.CssVec2(rect.dimensions, rect.unitW, rect.unitH));
-    }
-
-    setPosition(element: HTMLElement, position: Css.CssVec2) {
+    setData(element: HTMLElement, data: SvelteSet<string>): void {
         const menu = this.menus.get(element);
         if (menu) {
-            menu.rect.position = position.v;
-            menu.rect.unitX = position.unitX;
-            menu.rect.unitY = position.unitY;
-        } else {
-            console.warn(`could not set position, element does not contain any associated menus, ${element}`);
+            this.menus.set(element, {
+                id: menu.id,
+                kind: menu.kind,
+                enabled: menu.enabled,
+                rect: this.defaultRect(element),
+                data: data,
+            });
         }
     }
 
-    setDimensions(element: HTMLElement, dimensions: Css.CssVec2) {
-        const menu = this.menus.get(element);
-        if (menu) {
-            menu.rect.dimensions = dimensions.v;
-            menu.rect.unitW = dimensions.unitX;
-            menu.rect.unitH = dimensions.unitY;
-        } else {
-            console.warn(`could not set dimensions, element does not contain any associated menus, ${element}`);
-        }
-    }
-
-    updateRect(element: HTMLElement, menu: Menu) {
+    private defaultRect(element: HTMLElement) {
         const elementRect = element.getBoundingClientRect();
-        menu.rect = new Css.CssRect(
+        return new Css.CssRect(
             {
                 v: new Vec2(elementRect.x - (160 - elementRect.width/2), elementRect.y + elementRect.height),
                 unitX: Css.UnitKind.PIXEL,
@@ -179,15 +192,14 @@ export class MenuManager {
                 unitH: Css.UnitKind.PIXEL,
                 unitW: Css.UnitKind.PIXEL,
             },
-        );
+        )
     }
 
-    tick(): void {
-        this._tick = !this._tick;
+    clear(): void {
+        this.menus.clear();
     }
 
-    menus: Map<HTMLElement, Menu> = $state(new Map());
-    private _tick = $state(false);
+    menus: Map<HTMLElement, Menu> = $state(new SvelteMap());
 }
 </script>
 
@@ -196,21 +208,13 @@ let {
     manager,
     searchSelect,
 }: Props = $props();
-
-// @ts-ignore
-let tick = $derived(manager._tick);
 </script>
 
-{#key tick}
 {#each manager.menus.keys() as element}
     {@const menu = manager.get(element)!}
     {#if menu.kind === MenuKind.SEARCH_SELECT}
         {#if menu.enabled}
-            {@render searchSelect(menu, new Set(["one", "two", "three"]))}
+            {@render searchSelect(menu)}
         {/if}
     {/if}
 {/each}
-{/key}
-
-<style lang="scss">
-</style>

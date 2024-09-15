@@ -1,15 +1,14 @@
 <script lang="ts">
-import { Vec2 } from "$lib/vector.svelte";
-import { Css } from "$lib/css.svelte";
-import { ApiClient } from "$lib/apiClient.svelte";
-import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
-import DropdownMenu from "$lib/DropdownMenu.svelte";
-import MenuManagerView, { MenuManager, type Menu, MenuKind as MenuManagerKind } from "$lib/MenuManager.svelte";
-import { type Props as DropdownMenuProps, type InputChangedEvent, MenuKind } from "$lib/DropdownMenu.svelte";
-import { DropdownMenuId } from "$lib/app.svelte";
-import { ComponentManager } from "$lib/componentManager.svelte";
+import MenuManagerView, { MenuManager, MenuKind as MenuManagerKind } from "$lib/MenuManager.svelte";
 import MenuSearchSelect from "$lib/MenuSearchSelect.svelte";
-import Rect from "$lib/Rectangle.svelte";
+import { ApiClient } from "$lib/apiClient.svelte";
+import { Css } from "$lib/css.svelte";
+import { DropdownMenuId } from "$lib/app.svelte";
+import { Vec2 } from "$lib/vector.svelte";
+import { onMount } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
+import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
+import { type SearchQueryParameters } from "$lib/api.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -40,6 +39,7 @@ const TEXT_ENCODER = new TextEncoder();
 const SEARCH_CLIENT = $state(new ApiClient("http://localhost:6969/", "search"));
 const PAGINATION_TOTAL_PAGES = 4;
 const SEARCH_DEBOUNCE_DELAY = 1000.0;
+const MENU_MANAGER: MenuManager = new MenuManager();
 
 let searchRequest: Search | null = $state(null);
 let tableBuffer: Promise<Search | null> | null = $state(null);
@@ -49,8 +49,30 @@ let numbersListElement: HTMLUListElement | null = $state(null);
 let pageOffset = $state(0);
 let debounceSearchLast = $state(performance.now());
 let debounceId = $state(-1);
-let projectsRequest: Projects | null = $state(null);
+let projectsRequest: Projects = $state({ hash: "", results: new SvelteSet<string>() });
 let projectsBuffer: Promise<Projects | null> | null = $state(null);
+
+let selectedProjects = $state(new Set<string>());
+function handleSelectedProject(event: Event) {
+    const inputEvent =  event as Event & { currentTarget: EventTarget & HTMLInputElement, target: EventTarget & HTMLInputElement };
+    if (inputEvent.target) {
+        if (inputEvent.target.checked) {
+            selectedProjects.add(inputEvent.target.value);
+        } else {
+            selectedProjects.delete(inputEvent.target.value);
+        }
+    }
+}
+
+onMount(() => {
+    const elements = document.querySelectorAll("[data-id]");
+    for (const element of elements) {
+        if (element) {
+            const dataId = parseInt(element.getAttribute("data-id")!);
+            MENU_MANAGER.add(element as HTMLElement, { id: dataId, kind: MenuManagerKind.SEARCH_SELECT, enabled: false, rect: new Css.CssRect() });
+        }
+    }
+});
 
 function expandTable() {
     toggled = !toggled;
@@ -177,7 +199,15 @@ function handleSearch(event: Event) {
                 if (searchRequest && hash === searchRequest.hash) {
                     console.warn("not implemented");
                 } else {
-                    tableBuffer = SEARCH_CLIENT.get(ApiParse.search, { amount: "100", q: (event.target) ? event.target.value : "" } );
+                    const queryParameters: SearchQueryParameters = {
+                        amount: "100",
+                        line: (event.target) ? event.target.value : "",
+                        projects: Array.from(selectedProjects),
+                    };
+
+                    console.log(queryParameters);
+
+                    tableBuffer = SEARCH_CLIENT.get(ApiParse.search, queryParameters);
                     tableBuffer.then(async (payload) => {
                         if (payload === null) return;
 
@@ -211,16 +241,53 @@ function handleSearch(event: Event) {
     }, SEARCH_DEBOUNCE_DELAY, event);
 }
 
-function shouldAnimateOnHover(text: string): boolean {
-    return true;
+function handleProjectSearch(event: Event) {
+    if (debounceId !== -1) { clearTimeout(debounceId); }
+
+    debounceId = setTimeout(async (event: PromptEvent) => {
+        const debounceSearchNow = performance.now();
+        if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
+            if (event.target && event.target.value !== "") {
+                const hash = await hex(event.target.value);
+                const dataId = parseInt(event.target.closest("[data-id]")?.getAttribute("data-id")!);
+
+                switch (dataId) {
+                    case DropdownMenuId.PROJECT_SELECT: {
+                        if (projectsRequest && hash === projectsRequest.hash) {
+                            console.warn("not implemented");
+                        } else {
+                            projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { amount: "100", projects: (event.target) ? event.target.value : "" } );
+                            projectsBuffer.then(async (payload) => {
+                                if (payload === null) return;
+
+                                if (projectsRequest !== null && payload.hash === projectsRequest.hash) {
+                                    // TODO: Fetch from cached
+                                    console.warn("same query, ignoring...", payload.hash, projectsRequest.hash);
+                                } else {
+                                    const target = document.querySelector(`#parameters>[data-id="${DropdownMenuId.PROJECT_SELECT}"]`);
+                                    if (target) {
+                                        MENU_MANAGER.setData(target as HTMLElement, payload.results);
+                                        projectsRequest = {
+                                            hash: payload.hash,
+                                            results: payload.results,
+                                        };
+                                    }
+                                }
+                            });
+                        }
+                    } break;
+                    default: {} break;
+                }
+
+            }
+
+            debounceSearchLast = debounceSearchNow;
+        }
+    }, SEARCH_DEBOUNCE_DELAY, event);
 }
 
-function once<E extends Event>(fn: ((event: E) => void) | null) {
-    return function (event: Event): void {
-        // @ts-ignore
-        if (fn) fn.call(this, event);
-        fn = null;
-    }
+function shouldAnimateOnHover(_: string): boolean {
+    return true;
 }
 
 function preventDefault<E extends Event>(fn: (event: E) => void) {
@@ -231,127 +298,15 @@ function preventDefault<E extends Event>(fn: (event: E) => void) {
     }
 }
 
-let MENU_MANAGER: MenuManager = new MenuManager();
-let menuManager: ComponentManager<HTMLElement, DropdownMenuProps> = $state(new ComponentManager());
-$effect(() => {
-    const elements = document.querySelectorAll("[data-id]");
-    for (const element of elements) {
-        if (element) {
-            element.addEventListener("toggleMenu", toggleDropdownMenu);
-            menuManager.add(element as HTMLElement, DropdownMenu);
-            MENU_MANAGER.add(element as HTMLElement, { kind: MenuManagerKind.SEARCH_SELECT, enabled: false, rect: new Css.CssRect() });
-        }
-    }
-});
-
-function toggleDropdownMenu(event: Event) {
-    const target = event.target as HTMLElement;
-    if (target.hasAttribute("opened")) {
-        menuManager.unmount(target);
-        target.removeAttribute("opened");
-    } else {
-        const targetRect = target.getBoundingClientRect();
-        const id = parseInt(target.getAttribute("data-id")!);
-        target.setAttribute("opened", "");
-
-        let targetProps: DropdownMenuProps = {
-            id: id,
-            kind: MenuKind.SELECT,
-            rect: new Css.CssRect(
-                {
-                    v: new Vec2(targetRect.x - (160 - targetRect.width/2), targetRect.y + targetRect.height),
-                    unitX: Css.UnitKind.PIXEL,
-                    unitY: Css.UnitKind.PIXEL,
-                },
-                {
-                    v: new Vec2(320, 320),
-                    unitH: Css.UnitKind.PIXEL,
-                    unitW: Css.UnitKind.PIXEL,
-                },
-            ),
-        };
-
-        switch (id) {
-            case DropdownMenuId.PROJECT_SELECT: {
-                targetProps.search = {
-                    oninput: (event: Event, data: any) => {
-                        if (debounceId !== -1) { clearTimeout(debounceId); }
-
-                        debounceId = setTimeout(async (event: InputChangedEvent) => {
-                            const debounceSearchNow = performance.now();
-                            if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
-                                if (event.target && event.target.value !== "") {
-                                    const hash = await hex(event.target.value);
-
-                                    if (projectsRequest && hash === projectsRequest.hash) {
-                                        console.warn("not implemented");
-                                    } else {
-                                        projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { projects: event.target.value } );
-
-                                        projectsBuffer.then(async (payload) => {
-                                            if (payload === null) return;
-
-                                            if (projectsRequest !== null && payload.hash === projectsRequest.hash) {
-                                                // TODO: Fetch from cached
-                                                console.warn("same query, ignoring...", payload.hash, projectsRequest.hash);
-                                            } else {
-                                                projectsRequest = {
-                                                    hash: payload.hash,
-                                                    results: payload.results,
-                                                };
-                                            }
-                                        });
-                                    }
-                                }
-                                debounceSearchLast = debounceSearchNow;
-                            }
-                        }, SEARCH_DEBOUNCE_DELAY, event);
-                    },
-                    data: projectsRequest?.results,
-                };
-            } break;
-
-            case DropdownMenuId.SEGMENT_SELECT:
-            case DropdownMenuId.SPEAKER_SELECT:
-            case DropdownMenuId.TIMERANGE_SELECT: { console.warn("not implemented"); } break;
-
-            default: {
-                console.warn(`unknown dropdown menu with ID ${id}`);
-            } break;
-        }
-
-        menuManager.mount(target, targetProps as DropdownMenuProps);
-    }
-}
-
 function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLInputElement }) {
     const target = event.target.closest("[data-id]") as HTMLElement;
     if (target) {
-        menuManager.dispatchEvent("toggleMenu", target);
         MENU_MANAGER.toggleGreedy(target);
     }
 }
 
 function handleDocumentClick(event: Event): void {
-    menuManager.unmountIf((element) => {
-        const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
-        const targetDataId = element.getAttribute("data-id");
-
-        if (eventDataId && targetDataId) {
-            if (eventDataId !== targetDataId) {
-                element.removeAttribute("opened");
-                return true;
-            } else {
-                element.setAttribute("opened", "");
-                return false;
-            }
-        }
-
-        element.removeAttribute("opened");
-        return true;
-    });
-
-    MENU_MANAGER.disableIf((element, menu) => {
+    MENU_MANAGER.disableIf((element, _) => {
         const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
         const targetDataId = element.getAttribute("data-id");
 
@@ -370,8 +325,8 @@ function handleDocumentClick(event: Event): void {
     });
 }
 
-function handleWindowResize(event: Event): void {
-    menuManager.unmountAll((element) => {
+function handleWindowResize(_: Event): void {
+    MENU_MANAGER.disableAll((element) => {
         element.removeAttribute("opened");
     });
 }
@@ -402,34 +357,24 @@ function handleWindowResize(event: Event): void {
 
         <div id="parameters">
             <h2 style="align-self: center;">Search Parameters</h2>
-            <div id="projects" data-id={DropdownMenuId.PROJECT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                Projects:
-                <select name="projects" id="paramProject" onmousedown={preventDefault(() => {})}>
-                    <option value="all">all</option>
-                </select>
-            </div>
-            <div id="segments" data-id={DropdownMenuId.SEGMENT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                Segments:
-                <select name="segments" id="paramSegment" onmousedown={preventDefault(() => {})}>
-                    <option value="all">all</option>
-                </select>
-            </div>
-            <div id="speakers" data-id={DropdownMenuId.SPEAKER_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                Speakers:
-                <select name="speakers" id="paramSpeakers" onmousedown={preventDefault(() => {})}>
-                    <option value="all">all</option>
-                </select>
-            </div>
-            <div data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange" onclick={preventDefault(handleDropDownMenu)}>
-                Time Range:
-                <select name="timeRangeStart" id="paramTimeRangeStart" onmousedown={preventDefault(() => {})}>
-                    <option value="all">00:00:00:00</option>
-                </select>
-                to
-                <select name="timeRangeEnd" id="paramTimeRangeEnd" onmousedown={preventDefault(() => {})}>
-                    <option value="all">00:00:00:00</option>
-                </select>
-            </div>
+            <button id="projects" data-id={DropdownMenuId.PROJECT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
+                <big>Projects:</big>
+                <small>all</small>
+            </button>
+            <button id="segments" data-id={DropdownMenuId.SEGMENT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
+                <big>Segments:</big>
+                <small>all</small>
+            </button>
+            <button id="speakers" data-id={DropdownMenuId.SPEAKER_SELECT} onclick={preventDefault(handleDropDownMenu)}>
+                <big>Speakers:</big>
+                <small>all</small>
+            </button>
+            <button data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange" onclick={preventDefault(handleDropDownMenu)}>
+                <big>Time Range:</big>
+                <big data-part="start" data-value="00:00:00:00">00:00:00:00</big>
+                <small>to</small>
+                <big data-part="end" data-value="00:00:00:00">00:00:00:00</big>
+            </button>
         </div>
     </form>
 
@@ -517,8 +462,13 @@ function handleWindowResize(event: Event): void {
 </div>
 
 <MenuManagerView manager={MENU_MANAGER}>
-    {#snippet searchSelect(menu, data)}
-        <MenuSearchSelect target={menu.rect} data={data}></MenuSearchSelect>
+    {#snippet searchSelect(menu)}
+        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} oninput={handleProjectSearch}>
+            {#snippet listItem(value: string)}
+                <input type="checkbox" checked={selectedProjects.has(value)} value="{value}" oninput={handleSelectedProject}>
+                <big>{value}</big>
+            {/snippet}
+        </MenuSearchSelect>
     {/snippet}
 </MenuManagerView>
 
@@ -547,11 +497,18 @@ div.root {
             @include flex(space-between, start, row);
             width: 100%;
             margin-top: 1rem;
-            > div, > :first-child { color: $blue-3; }
 
-            > div {
+            big {
+                font-size: 1.25rem;
+                font-weight: bold;
+            }
+
+            > button, > :first-child { color: $blue-3; }
+
+            > button {
                 @include button-style(1px solid transparent);
-                padding: 0.25rem 0rem 0.25rem 0.5rem;
+                padding: 0.25rem 0.5rem 0.25rem 0.5rem;
+                align-self: center;
             }
 
         }

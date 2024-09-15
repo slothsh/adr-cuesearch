@@ -20,7 +20,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = { "message": "pong!" }
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
-        elif 'q' in query_params:
+        elif 'line' in query_params:
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -34,8 +34,10 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 amount = int(query_params['amount'][0])
 
             encoder = hashlib.sha1()
-            encoder.update(query_params['q'][0].encode())
+            encoder.update(query_params['line'][0].encode())
             hash = encoder.digest().hex()
+
+            print(query_params["projects"])
 
             response = {
                 "hash": hash,

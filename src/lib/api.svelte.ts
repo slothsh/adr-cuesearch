@@ -1,3 +1,5 @@
+import { SvelteSet } from "svelte/reactivity";
+
 export interface Ping {
     message: "ping",
 }
@@ -39,15 +41,28 @@ export type SearchTable = Array<SearchRow>;
 export interface Search {
     hash: string,
     results: SearchTable,
+    __search?: never,
 }
 
 export interface SearchQueryParameters {
-    q: string,
+    line: string,
+    projects?: Array<string> | "*",
     amount?: string,
 }
 
-type SameAs<T, U> =
-      keyof T extends keyof U ? keyof U extends keyof T
+export interface Projects {
+    hash: string,
+    results: SvelteSet<string>,
+    __projects?: never,
+}
+
+export interface ProjectsQueryParameters {
+    projects: string,
+    amount?: string,
+}
+
+type SameAs<T, U> = keyof T extends keyof U
+    ? keyof U extends keyof T
         ? true
         : false
     : false;
@@ -55,6 +70,7 @@ type SameAs<T, U> =
 export type ParametersFor<T> =
       SameAs<T, Ping> extends true   ? PingQueryParameters
     : SameAs<T, Search> extends true ? SearchQueryParameters
+    : SameAs<T, Projects> extends true ? ProjectsQueryParameters
     : Record<string, string>;
 
 export namespace Parse {
@@ -82,5 +98,19 @@ export namespace Parse {
         }
 
         return data;
+    }
+
+    export function projects(body: string): Projects | null  {
+        const data: Projects = JSON.parse(body);
+        if (!("hash" in data) || !("results" in data)) {
+            console.error("response data for Projects is invalid");
+            console.error(body);
+            return null;
+        }
+
+        return {
+            hash: data.hash,
+            results: new SvelteSet(data.results),
+        };
     }
 }

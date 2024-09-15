@@ -1,10 +1,14 @@
 <script module lang="ts">
 import { Css } from "./css.svelte";
+import { SvelteSet } from "svelte/reactivity";
+import { type Snippet } from "svelte";
 
 export interface Props {
+    dataId: number,
     target: Css.CssRect,
-    data?: Set<string>,
+    data?: SvelteSet<string>,
     oninput?: (event: Event) => void,
+    listItem: Snippet<[string]>,
 }
 </script>
 
@@ -12,26 +16,38 @@ export interface Props {
 import Rect from "./Rectangle.svelte";
 
 let {
+    dataId,
     target,
-    data = new Set(),
+    data,
     oninput = (event: Event) => {},
+    listItem,
 }: Props = $props();
 </script>
 
-<Rect {target}>
-    <div class="root">
+<Rect {target}
+    style={{
+        zIndex: "1000",
+        overflow: "hidden",
+    }}>
+    <div data-id={dataId} class="root">
         <div class="view">
             <div class="select-search">
                 <input
                     type="text"
                     autocomplete="off"
-                    oninput={(event) => { if (oninput) oninput(event); }}>
+                    {oninput}>
             </div>
 
             <ul class="select-list">
             {#if data}
-                {#each data as msg}
-                    <li>{msg}</li>
+                {#each data as value}
+                    <li>
+                        {#if listItem}
+                            {@render listItem(value)}
+                        {:else}
+                            <big>{value}</big>
+                        {/if}
+                    </li>
                 {/each}
             {/if}
             </ul>
@@ -45,7 +61,8 @@ let {
 div.root {
     overflow: hidden;
     padding: 1rem;
-    z-index: 1000;
+    width: 100%;
+    height: 100%;
 
     :global(.select-list li) {
         padding: 1rem;
@@ -88,8 +105,8 @@ div.root {
         @include keyframes-fade();
         @include keyframes-slide();
 
-        // animation: fade 500ms ease-in-out 1,
-        //            slide 250ms ease-in-out 1;
+        animation: fade 500ms ease-in-out 1,
+                   slide 250ms ease-in-out 1;
     }
 }
 </style>
