@@ -21,6 +21,7 @@ export namespace Css {
         EX = "ex",
         CH = "ch",
         AUTO = "auto",
+        UNSET = "unset",
     }
 
     export class Unit {
@@ -32,7 +33,8 @@ export namespace Css {
         toString(): string {
             // TODO: Bounds checking based on unit
             switch (this.unit) {
-                case UnitKind.AUTO: {
+                case UnitKind.AUTO:
+                case UnitKind.UNSET: {
                     return this.unit;
                 }
 
@@ -185,7 +187,7 @@ export function cssStyleString(styles: CssStyleConfig): string {
     }
 
     type CssRectPositionOptions = { v: Vec2, unitX: UnitKind, unitY: UnitKind };
-    type CssRectDimensionsOptions = { v: Vec2, unitW: UnitKind, unitH: UnitKind };
+    type CssRectDimensionsOptions = { v: Vec2, unitW: UnitKind, unitH: UnitKind, m?: Vec2, unitMaxW?: UnitKind, unitMaxH?: UnitKind };
 
     export class CssRect {
         constructor(position?: CssRectPositionOptions, dimensions?: CssRectDimensionsOptions) {
@@ -204,12 +206,22 @@ export function cssStyleString(styles: CssStyleConfig): string {
             } else {
                 this.dimensions = new Vec2();
             }
+
+            if (dimensions?.m) {
+                this.maxDimensions = dimensions.m;
+                this.unitMaxW = (dimensions.unitMaxW) ? dimensions.unitMaxW : this.unitMaxW;
+                this.unitMaxH = (dimensions.unitMaxH) ? dimensions.unitMaxH : this.unitMaxH;
+            } else {
+                this.maxDimensions = new Vec2();
+            }
         }
 
         y(): string { return new Css.Unit(this.position.y, this.unitY).toString(); }
         x(): string { return new Css.Unit(this.position.x, this.unitX).toString(); }
         w(): string { return new Css.Unit(this.dimensions.x, this.unitW).toString(); }
         h(): string { return new Css.Unit(this.dimensions.y, this.unitH).toString(); }
+        maxW(): string { return new Css.Unit(this.maxDimensions.x, this.unitMaxW).toString(); }
+        maxH(): string { return new Css.Unit(this.maxDimensions.y, this.unitMaxH).toString(); }
 
         clone(): CssRect {
             return new CssRect(
@@ -223,7 +235,11 @@ export function cssStyleString(styles: CssStyleConfig): string {
         unitW: Css.UnitKind = $state(Css.UnitKind.PIXEL);
         unitH: Css.UnitKind = $state(Css.UnitKind.PIXEL);
 
+        unitMaxW: Css.UnitKind = $state(Css.UnitKind.UNSET);
+        unitMaxH: Css.UnitKind = $state(Css.UnitKind.UNSET);
+
         position: Vec2;
         dimensions: Vec2;
+        maxDimensions: Vec2;
     }
 }

@@ -47,6 +47,8 @@ export interface Search {
 export interface SearchQueryParameters {
     line: string,
     projects?: Array<string> | "*",
+    segments?: Array<string> | "*",
+    speakers?: Array<string> | "*",
     amount?: string,
 }
 
@@ -61,6 +63,28 @@ export interface ProjectsQueryParameters {
     amount?: string,
 }
 
+export interface Segments {
+    hash: string,
+    results: SvelteSet<string>,
+    __segments?: never,
+}
+
+export interface SegmentsQueryParameters {
+    segments: string,
+    amount?: string,
+}
+
+export interface Speakers {
+    hash: string,
+    results: SvelteSet<string>,
+    __speakers?: never,
+}
+
+export interface SpeakersQueryParameters {
+    speakers: string,
+    amount?: string,
+}
+
 type SameAs<T, U> = keyof T extends keyof U
     ? keyof U extends keyof T
         ? true
@@ -71,6 +95,8 @@ export type ParametersFor<T> =
       SameAs<T, Ping> extends true   ? PingQueryParameters
     : SameAs<T, Search> extends true ? SearchQueryParameters
     : SameAs<T, Projects> extends true ? ProjectsQueryParameters
+    : SameAs<T, Segments> extends true ? SegmentsQueryParameters
+    : SameAs<T, Speakers> extends true ? SpeakersQueryParameters
     : Record<string, string>;
 
 export namespace Parse {
@@ -104,6 +130,35 @@ export namespace Parse {
         const data: Projects = JSON.parse(body);
         if (!("hash" in data) || !("results" in data)) {
             console.error("response data for Projects is invalid");
+            console.error(body);
+            return null;
+        }
+
+        return {
+            hash: data.hash,
+            results: new SvelteSet(data.results),
+        };
+    }
+
+
+    export function segments(body: string): Segments | null  {
+        const data: Segments = JSON.parse(body);
+        if (!("hash" in data) || !("results" in data)) {
+            console.error("response data for Segments is invalid");
+            console.error(body);
+            return null;
+        }
+
+        return {
+            hash: data.hash,
+            results: new SvelteSet(data.results),
+        };
+    }
+
+    export function speakers(body: string): Speakers | null  {
+        const data: Speakers = JSON.parse(body);
+        if (!("hash" in data) || !("results" in data)) {
+            console.error("response data for Speakers is invalid");
             console.error(body);
             return null;
         }

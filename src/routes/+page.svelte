@@ -7,7 +7,7 @@ import { DropdownMenuId } from "$lib/app.svelte";
 import { Vec2 } from "$lib/vector.svelte";
 import { onMount } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
-import { type Search, type Projects, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
+import { type Search, type Projects, type Segments, type Speakers, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 import { type SearchQueryParameters } from "$lib/api.svelte";
 import CheckBox from "$lib/CheckBox.svelte";
 
@@ -50,20 +50,53 @@ let numbersListElement: HTMLUListElement | null = $state(null);
 let pageOffset = $state(0);
 let debounceSearchLast = $state(performance.now());
 let debounceId = $state(-1);
+
 let projectsRequest: Projects = $state({ hash: "", results: new SvelteSet<string>() });
 let projectsBuffer: Promise<Projects | null> | null = $state(null);
 let pinnedProjects = $state(new SvelteSet<string>());
 
-function handleSelectedProject(event: Event) {
-    const inputEvent =  event as Event & { currentTarget: EventTarget & HTMLInputElement, target: EventTarget & HTMLInputElement };
-    const buttonElement = inputEvent.target.querySelector("[data-value]");
+let segmentsRequest: Segments = $state({ hash: "", results: new SvelteSet<string>() });
+let segmentsBuffer: Promise<Segments | null> | null = $state(null);
+let pinnedSegments = $state(new SvelteSet<string>());
+
+let speakersRequest: Speakers = $state({ hash: "", results: new SvelteSet<string>() });
+let speakersBuffer: Promise<Speakers | null> | null = $state(null);
+let pinnedSpeakers = $state(new SvelteSet<string>());
+
+function handleSelectedParameter(event: MouseEvent, dataId: number) {
+    const inputEvent =  event as MouseEvent & { currentTarget: EventTarget & HTMLInputElement, target: EventTarget & HTMLInputElement };
+    let buttonElement = inputEvent.target.closest("li")?.querySelector("[data-value]");
+
     if (buttonElement) {
-        const value = buttonElement.getAttribute("data-value");
-        if (value && pinnedProjects.has(value)) {
-            pinnedProjects.delete(value);
-        } else if (value) {
-            pinnedProjects.add(value);
+        let pinned = null;
+        switch (dataId) {
+            case DropdownMenuId.PROJECT_SELECT: { pinned = pinnedProjects; } break;
+            case DropdownMenuId.SEGMENT_SELECT: { pinned = pinnedSegments; } break;
+            case DropdownMenuId.SPEAKER_SELECT: { pinned = pinnedSpeakers; } break;
+
+            case DropdownMenuId.TIMERANGE_SELECT: { console.warn("not implemented"); }
+            default: return;
         }
+
+        if (pinned) {
+            const value = buttonElement.getAttribute("data-value");
+            if (value && pinnedProjects.has(value)) {
+                pinned.delete(value);
+            } else if (value) {
+                pinned.add(value);
+            }
+        }
+    }
+}
+
+function pinnedContains(id: number, value: string): boolean {
+    switch (id) {
+        case DropdownMenuId.PROJECT_SELECT: return pinnedProjects.has(value);
+        case DropdownMenuId.SEGMENT_SELECT: return pinnedSegments.has(value);
+        case DropdownMenuId.SPEAKER_SELECT: return pinnedSpeakers.has(value);
+
+        case DropdownMenuId.TIMERANGE_SELECT: { console.warn("not implemented"); }
+        default: return false;
     }
 }
 
@@ -206,6 +239,8 @@ function handleSearch(event: Event) {
                         amount: "100",
                         line: (event.target) ? event.target.value : "",
                         projects: Array.from(pinnedProjects),
+                        segments: Array.from(pinnedSegments),
+                        speakers: Array.from(pinnedSpeakers),
                     };
 
                     console.log(queryParameters);
@@ -244,47 +279,118 @@ function handleSearch(event: Event) {
     }, SEARCH_DEBOUNCE_DELAY, event);
 }
 
-function handleProjectSearch(event: Event) {
+function handleParameterSearch(event: Event) {
     if (debounceId !== -1) { clearTimeout(debounceId); }
 
     debounceId = setTimeout(async (event: PromptEvent) => {
         const debounceSearchNow = performance.now();
-        if ((debounceSearchNow - debounceSearchLast) >= SEARCH_DEBOUNCE_DELAY) {
-            if (event.target && event.target.value !== "") {
-                const hash = await hex(event.target.value);
-                const dataId = parseInt(event.target.closest("[data-id]")?.getAttribute("data-id")!);
+        if ((debounceSearchNow - debounceSearchLast) < SEARCH_DEBOUNCE_DELAY) return;
+        debounceSearchLast = debounceSearchNow;
 
-                switch (dataId) {
-                    case DropdownMenuId.PROJECT_SELECT: {
-                        if (projectsRequest && hash === projectsRequest.hash) {
-                            console.warn("not implemented");
-                        } else {
-                            projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { amount: "100", projects: (event.target) ? event.target.value : "" } );
-                            projectsBuffer.then(async (payload) => {
-                                if (payload === null) return;
+        if (!event.target) return;
+        const hash = await hex(event.target.value);
+        const dataId = parseInt(event.target.closest("[data-id]")?.getAttribute("data-id")!);
 
-                                if (projectsRequest !== null && payload.hash === projectsRequest.hash) {
-                                    // TODO: Fetch from cached
-                                    console.warn("same query, ignoring...", payload.hash, projectsRequest.hash);
-                                } else {
-                                    const target = document.querySelector(`#parameters>[data-id="${DropdownMenuId.PROJECT_SELECT}"]`);
-                                    if (target) {
-                                        MENU_MANAGER.setData(target as HTMLElement, payload.results);
-                                        projectsRequest = {
-                                            hash: payload.hash,
-                                            results: payload.results,
-                                        };
-                                    }
-                                }
-                            });
-                        }
-                    } break;
-                    default: {} break;
+        switch (dataId) {
+            case DropdownMenuId.PROJECT_SELECT: {
+                const target = document.querySelector(`#parameters>[data-id="${DropdownMenuId.PROJECT_SELECT}"]`);
+                if (target && event.target.value === "") {
+                    projectsRequest.results.clear();
+                    MENU_MANAGER.setData(target as HTMLElement, pinnedProjects);
+                    return;
                 }
 
-            }
+                if (projectsRequest && hash === projectsRequest.hash) {
+                    console.warn("not implemented");
+                } else {
+                    projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { amount: "100", projects: (event.target) ? event.target.value : "" } );
+                    projectsBuffer.then(async (payload) => {
+                        if (payload === null) return;
 
-            debounceSearchLast = debounceSearchNow;
+                        if (projectsRequest !== null && payload.hash === projectsRequest.hash) {
+                            // TODO: Fetch from cached
+                            console.warn("same query, ignoring...", payload.hash, projectsRequest.hash);
+                        } else {
+                            if (target) {
+                                let tmp = pinnedProjects.union(payload.results);
+                                MENU_MANAGER.setData(target as HTMLElement, new SvelteSet(tmp));
+                                projectsRequest = {
+                                    hash: payload.hash,
+                                    results: payload.results,
+                                };
+                            }
+                        }
+                    });
+                }
+            } break;
+
+            case DropdownMenuId.SEGMENT_SELECT: {
+                const target = document.querySelector(`#parameters>[data-id="${DropdownMenuId.SEGMENT_SELECT}"]`);
+                if (target && event.target.value === "") {
+                    segmentsRequest.results.clear();
+                    MENU_MANAGER.setData(target as HTMLElement, pinnedSegments);
+                    return;
+                }
+
+                if (segmentsRequest && hash === segmentsRequest.hash) {
+                    console.warn("not implemented");
+                } else {
+                    segmentsBuffer = SEARCH_CLIENT.get(ApiParse.segments, { amount: "100", segments: (event.target) ? event.target.value : "" } );
+                    segmentsBuffer.then(async (payload) => {
+                        if (payload === null) return;
+
+                        if (segmentsRequest !== null && payload.hash === segmentsRequest.hash) {
+                            // TODO: Fetch from cached
+                            console.warn("same query, ignoring...", payload.hash, segmentsRequest.hash);
+                        } else {
+                            if (target) {
+                                let tmp = pinnedSegments.union(payload.results);
+                                MENU_MANAGER.setData(target as HTMLElement, new SvelteSet(tmp));
+                                segmentsRequest = {
+                                    hash: payload.hash,
+                                    results: payload.results,
+                                };
+                            }
+                        }
+                    });
+                }
+            } break;
+
+            case DropdownMenuId.SPEAKER_SELECT: {
+                const target = document.querySelector(`#parameters>[data-id="${DropdownMenuId.SPEAKER_SELECT}"]`);
+                if (target && event.target.value === "") {
+                    speakersRequest.results.clear();
+                    MENU_MANAGER.setData(target as HTMLElement, pinnedSpeakers);
+                    return;
+                }
+
+                if (speakersRequest && hash === speakersRequest.hash) {
+                    console.warn("not implemented");
+                } else {
+                    speakersBuffer = SEARCH_CLIENT.get(ApiParse.speakers, { amount: "100", speakers: (event.target) ? event.target.value : "" } );
+                    speakersBuffer.then(async (payload) => {
+                        if (payload === null) return;
+
+                        if (speakersRequest !== null && payload.hash === speakersRequest.hash) {
+                            // TODO: Fetch from cached
+                            console.warn("same query, ignoring...", payload.hash, speakersRequest.hash);
+                        } else {
+                            if (target) {
+                                let tmp = pinnedSpeakers.union(payload.results);
+                                MENU_MANAGER.setData(target as HTMLElement, new SvelteSet(tmp));
+                                speakersRequest = {
+                                    hash: payload.hash,
+                                    results: payload.results,
+                                };
+                            }
+                        }
+                    });
+                }
+            } break;
+
+            case DropdownMenuId.TIMERANGE_SELECT: { console.warn("not implemented"); } break;
+
+            default: {} break;
         }
     }, SEARCH_DEBOUNCE_DELAY, event);
 }
@@ -301,7 +407,7 @@ function preventDefault<E extends Event>(fn: (event: E) => void) {
     }
 }
 
-function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLInputElement }) {
+function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLDivElement }) {
     const target = event.target.closest("[data-id]") as HTMLElement;
     if (target) {
         MENU_MANAGER.toggleGreedy(target);
@@ -310,7 +416,8 @@ function handleDropDownMenu(event: MouseEvent & { target: EventTarget & HTMLInpu
 
 function handleDocumentClick(event: Event): void {
     MENU_MANAGER.disableIf((element, _) => {
-        const eventDataId = (event.target as HTMLElement).closest("[data-id]")?.getAttribute("data-id");
+        const eventRoot = (event.target as HTMLElement).closest("[data-id]");
+        const eventDataId = eventRoot?.getAttribute("data-id");
         const targetDataId = element.getAttribute("data-id");
 
         if (eventDataId && targetDataId) {
@@ -318,7 +425,9 @@ function handleDocumentClick(event: Event): void {
                 element.removeAttribute("opened");
                 return true;
             } else {
-                element.setAttribute("opened", "");
+                if (element === eventRoot) {
+                    element.toggleAttribute("opened");
+                }
                 return false;
             }
         }
@@ -344,6 +453,14 @@ function handleWindowResize(_: Event): void {
 <svelte:document onclick={handleDocumentClick}></svelte:document>
 <svelte:window onresize={handleWindowResize}></svelte:window>
 
+{#snippet closeButton(pinned: SvelteSet<string>)}
+    {#if pinned.size > 0}
+        <button class="close" onclick={() => { pinned.clear(); }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="0.75em" height="1em" viewBox="0 0 384 512"><path fill="currentColor" d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7L86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256L41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3l105.4 105.3c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256z"/></svg>
+        </button>
+    {/if}
+{/snippet}
+
 <div class="root">
     <form action="javascript:void(0);"
         style:--input-x={promptRect.x()}
@@ -360,24 +477,40 @@ function handleWindowResize(_: Event): void {
 
         <div id="parameters">
             <h2 style="align-self: center;">Search Parameters</h2>
-            <button id="projects" data-id={DropdownMenuId.PROJECT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                <big>Projects:</big>
-                <small>all</small>
-            </button>
-            <button id="segments" data-id={DropdownMenuId.SEGMENT_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                <big>Segments:</big>
-                <small>all</small>
-            </button>
-            <button id="speakers" data-id={DropdownMenuId.SPEAKER_SELECT} onclick={preventDefault(handleDropDownMenu)}>
-                <big>Speakers:</big>
-                <small>all</small>
-            </button>
-            <button data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange" onclick={preventDefault(handleDropDownMenu)}>
-                <big>Time Range:</big>
-                <big data-part="start" data-value="00:00:00:00">00:00:00:00</big>
-                <small>to</small>
-                <big data-part="end" data-value="00:00:00:00">00:00:00:00</big>
-            </button>
+            <div id="projects" data-id={DropdownMenuId.PROJECT_SELECT}>
+                <button onclick={preventDefault(handleDropDownMenu)}>
+                    <big>Projects:</big>
+                    <small>
+                        {pinnedProjects.size} Selected
+                    </small>
+                </button>
+                {@render closeButton(pinnedProjects)}
+            </div>
+            <div id="segments" data-id={DropdownMenuId.SEGMENT_SELECT}>
+                <button onclick={preventDefault(handleDropDownMenu)}>
+                    <big>Segments:</big>
+                    <small>
+                        {pinnedSegments.size} Selected
+                    </small>
+                    {@render closeButton(pinnedSegments)}
+                </button>
+            </div>
+            <div id="speakers" data-id={DropdownMenuId.SPEAKER_SELECT}>
+                <button onclick={preventDefault(handleDropDownMenu)}>
+                    <big>Speakers:</big>
+                    <small>
+                        {pinnedSpeakers.size} Selected
+                    </small>
+                    {@render closeButton(pinnedSpeakers)}
+                </button>
+            </div>
+            <div data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange">
+                <button onclick={preventDefault(handleDropDownMenu)}>
+                    <bold style:font-weight="bold" data-part="start" data-value="00:00:00:00">00:00:00:00</bold>
+                    <small>to</small>
+                    <bold style:font-weight="bold" data-part="end" data-value="00:00:00:00">00:00:00:00</bold>
+                </button>
+            </div>
         </div>
     </form>
 
@@ -466,12 +599,16 @@ function handleWindowResize(_: Event): void {
 
 <MenuManagerView manager={MENU_MANAGER}>
     {#snippet searchSelect(menu)}
-        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} onclick={handleSelectedProject} oninput={handleProjectSearch}>
+        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} onclick={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} oninput={handleParameterSearch}>
             {#snippet listItem(value: string)}
                 <div class="checkbox">
-                    <CheckBox checked={pinnedProjects.has(value)} {value} oninput={handleSelectedProject} />
+                    <CheckBox checked={pinnedContains(menu.id, value)} {value} oninput={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} />
                     <big>{value}</big>
                 </div>
+            {/snippet}
+
+            {#snippet empty()}
+                <div>Start typing to search...</div>
             {/snippet}
         </MenuSearchSelect>
     {/snippet}
@@ -511,16 +648,37 @@ div.root {
             big {
                 font-size: 1.25rem;
                 font-weight: bold;
+                margin-right: 1rem;
             }
 
-            > button, > :first-child { color: $blue-3; }
+            > button, > div, > :first-child { color: $blue-3; }
 
-            > button {
+            > button, > div {
                 @include button-style(1px solid transparent);
                 padding: 0.25rem 0.5rem 0.25rem 0.5rem;
                 align-self: center;
-            }
 
+                > button:not(.close) {
+                    border: none;
+                }
+
+                > button.close:last-child {
+                    padding: 0.25rem 0.4rem;
+                    margin-left: 1rem;
+                    display: inline-flex;
+                    justify-content: center;
+                    align-items: center;
+
+                    &:hover {
+                        border-color: $blue-2;
+                        background-color: $blue-3;
+
+                        * {
+                            background-color: $blue-3;
+                        }
+                    }
+                }
+            }
         }
     }
 

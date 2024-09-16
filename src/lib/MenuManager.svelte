@@ -179,24 +179,34 @@ export class MenuManager {
         }
     }
 
+    private readonly DEFAULT_RECT_WIDTH = 420;
+    private readonly DEFAULT_RECT_HEIGHT = 420;
     private defaultRect(element: HTMLElement) {
         const elementRect = element.getBoundingClientRect();
         return new Css.CssRect(
             {
-                v: new Vec2(elementRect.x - (160 - elementRect.width/2), elementRect.y + elementRect.height),
+                v: new Vec2(elementRect.x - (this.DEFAULT_RECT_WIDTH/2 - elementRect.width/2), elementRect.y + elementRect.height),
                 unitX: Css.UnitKind.PIXEL,
                 unitY: Css.UnitKind.PIXEL,
             },
             {
-                v: new Vec2(320, 320),
-                unitH: Css.UnitKind.PIXEL,
+                v: new Vec2(this.DEFAULT_RECT_WIDTH, this.DEFAULT_RECT_HEIGHT),
                 unitW: Css.UnitKind.PIXEL,
+                unitH: Css.UnitKind.AUTO,
             },
         )
     }
 
     clear(): void {
         this.menus.clear();
+    }
+    
+    clearData(element: HTMLElement): void {
+        const menu = this.menus.get(element);
+        console.log(menu);
+        if (menu && menu.data) {
+            menu.data.clear();
+        }
     }
 
     menus: Map<HTMLElement, Menu> = $state(new SvelteMap());

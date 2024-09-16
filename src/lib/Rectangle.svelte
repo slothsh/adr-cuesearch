@@ -24,7 +24,7 @@ let computedStyle = $derived(Css.cssStyleString(style));
 
 <svelte:element class="root"
     this={tag}
-    style="left: {target.x()}; top: {target.y()}; width: {target.w()}; height: {target.h()}; {computedStyle}">
+    style="left: {target.x()}; top: {target.y()}; width: {target.w()}; height: {target.h()}; max-width: {target.maxW()}; max-height: {target.maxH()}; {computedStyle}">
     {@render children?.()}
 </svelte:element>
 

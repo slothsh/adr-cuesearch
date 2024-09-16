@@ -10,6 +10,7 @@ export interface Props {
     oninput?: (event: Event) => void,
     onclick?: (event: Event) => void,
     listItem: Snippet<[string]>,
+    empty: Snippet,
 }
 </script>
 
@@ -23,6 +24,7 @@ let {
     oninput = (event: Event) => {},
     onclick = (event: Event) => {},
     listItem,
+    empty,
 }: Props = $props();
 </script>
 
@@ -39,6 +41,12 @@ let {
                     autocomplete="off"
                     {oninput}>
             </div>
+
+            {#if !data || (data && data.size === 0)}
+                <div class="empty">
+                    {@render empty()}
+                </div>
+            {/if}
 
             <ul class="select-list">
             {#if data}
@@ -103,6 +111,18 @@ div.root {
         box-shadow: 0px 0px 16px rgba(0, 0, 0, 0.5);
         border-radius: 8px;
         overflow-y: auto;
+        max-height: 300px;
+
+        .empty {
+            width: 100%;
+            height: 100%;
+            padding: 1rem;
+            @include flex(center, center);
+
+            > * {
+                align-self: center;
+            }
+        }
 
         li {
             cursor: pointer;

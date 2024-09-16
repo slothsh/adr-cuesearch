@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 import json
 import hashlib
+from random import randint
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -36,8 +37,6 @@ class SimpleHandler(BaseHTTPRequestHandler):
             encoder = hashlib.sha1()
             encoder.update(query_params['line'][0].encode())
             hash = encoder.digest().hex()
-
-            print(query_params["projects"])
 
             response = {
                 "hash": hash,
@@ -96,7 +95,59 @@ class SimpleHandler(BaseHTTPRequestHandler):
             }
 
             for n in range(amount):
-                response["results"].append(f"project {n}")
+                response["results"].append(f"{hash[:8]} {randint(1, 1000)}")
+
+            self.wfile.write(bytes(json.dumps(response), "utf-8"))
+        elif 'segments' in query_params:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Origin', '*')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Credentials', 'true')  # Adjust for your specific origin policy
+            self.end_headers()
+            
+            amount = 5
+            if 'amount' in query_params and query_params['amount'][0].isnumeric():
+                amount = int(query_params['amount'][0])
+
+            encoder = hashlib.sha1()
+            encoder.update(query_params['segments'][0].encode())
+            hash = encoder.digest().hex()
+
+            response = {
+                "hash": hash,
+                "results": []
+            }
+
+            for n in range(amount):
+                response["results"].append(f"{hash[:8]} {randint(1, 1000)}")
+
+            self.wfile.write(bytes(json.dumps(response), "utf-8"))
+        elif 'speakers' in query_params:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Origin', '*')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')  # Adjust for your specific origin policy
+            self.send_header('Access-Control-Allow-Credentials', 'true')  # Adjust for your specific origin policy
+            self.end_headers()
+            
+            amount = 5
+            if 'amount' in query_params and query_params['amount'][0].isnumeric():
+                amount = int(query_params['amount'][0])
+
+            encoder = hashlib.sha1()
+            encoder.update(query_params['speakers'][0].encode())
+            hash = encoder.digest().hex()
+
+            response = {
+                "hash": hash,
+                "results": []
+            }
+
+            for n in range(amount):
+                response["results"].append(f"{hash[:8]} {randint(1, 1000)}")
 
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
         else:
