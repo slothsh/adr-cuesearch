@@ -7,6 +7,7 @@ import { SvelteMap, SvelteSet } from "svelte/reactivity";
 export interface Props {
     manager: MenuManager,
     searchSelect: Snippet<[Menu]>,
+    searchTimeRange: Snippet<[Menu]>,
 }
 
 export interface Menu {
@@ -20,6 +21,7 @@ export interface Menu {
 export const enum MenuKind {
     EMPTY = -1,
     SEARCH_SELECT,
+    SEARCH_TIME_RANGE,
 }
 
 export class MenuManager {
@@ -217,6 +219,7 @@ export class MenuManager {
 let {
     manager,
     searchSelect,
+    searchTimeRange,
 }: Props = $props();
 </script>
 
@@ -225,6 +228,10 @@ let {
     {#if menu.kind === MenuKind.SEARCH_SELECT}
         {#if menu.enabled}
             {@render searchSelect(menu)}
+        {/if}
+    {:else if menu.kind === MenuKind.SEARCH_TIME_RANGE}
+        {#if menu.enabled}
+            {@render searchTimeRange(menu)}
         {/if}
     {/if}
 {/each}

@@ -1,4 +1,5 @@
 import { SvelteSet } from "svelte/reactivity";
+import { Timecode, Fps } from "./timecode.svelte";
 
 export interface Ping {
     message: "ping",
@@ -49,6 +50,7 @@ export interface SearchQueryParameters {
     projects?: Array<string> | "*",
     segments?: Array<string> | "*",
     speakers?: Array<string> | "*",
+    timeRange?: { start: Timecode, end: Timecode, toString: () => string } | "*",
     amount?: string,
 }
 

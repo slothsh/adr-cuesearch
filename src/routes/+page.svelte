@@ -1,6 +1,7 @@
 <script lang="ts">
 import MenuManagerView, { MenuManager, MenuKind as MenuManagerKind } from "$lib/MenuManager.svelte";
 import MenuSearchSelect from "$lib/MenuSearchSelect.svelte";
+import MenuSearchTimeRange from "$lib/MenuSearchTimeRange.svelte";
 import { ApiClient } from "$lib/apiClient.svelte";
 import { Css } from "$lib/css.svelte";
 import { DropdownMenuId } from "$lib/app.svelte";
@@ -10,6 +11,8 @@ import { SvelteSet } from "svelte/reactivity";
 import { type Search, type Projects, type Segments, type Speakers, Parse as ApiParse, columnDisplayName } from "$lib/api.svelte";
 import { type SearchQueryParameters } from "$lib/api.svelte";
 import CheckBox from "$lib/CheckBox.svelte";
+import { Timecode, Fps } from "$lib/timecode.svelte";
+import TimecodeCapture from "$lib/TimecodeCapture.svelte";
 
 type ViewSlice = { start: number, end: number, length: number };
 type PromptEvent = Event & { target: EventTarget & HTMLInputElement | null };
@@ -62,6 +65,9 @@ let pinnedSegments = $state(new SvelteSet<string>());
 let speakersRequest: Speakers = $state({ hash: "", results: new SvelteSet<string>() });
 let speakersBuffer: Promise<Speakers | null> | null = $state(null);
 let pinnedSpeakers = $state(new SvelteSet<string>());
+
+let timeRangeIn: Timecode = $state(new Timecode([0, 0, 0, 0], Fps.F25));
+let timeRangeOut: Timecode = $state(new Timecode([0, 0, 0, 0], Fps.F25));
 
 function handleSelectedParameter(event: MouseEvent, dataId: number) {
     const inputEvent =  event as MouseEvent & { currentTarget: EventTarget & HTMLInputElement, target: EventTarget & HTMLInputElement };
@@ -241,6 +247,15 @@ function handleSearch(event: Event) {
                         projects: Array.from(pinnedProjects),
                         segments: Array.from(pinnedSegments),
                         speakers: Array.from(pinnedSpeakers),
+                        timeRange: {
+                            start: timeRangeIn,
+                            end: timeRangeOut,
+                            toString() {
+                                // @ts-ignore
+                                return `${this.start}+${this.start.fps}-${this.end}+${this.end.fps}`;
+                            }
+                        },
+
                     };
 
                     console.log(queryParameters);
@@ -401,6 +416,7 @@ function shouldAnimateOnHover(_: string): boolean {
 
 function preventDefault<E extends Event>(fn: (event: E) => void) {
     return function (event: Event) {
+        event.stopPropagation();
         event.preventDefault();
         // @ts-ignore
         fn.call(this, event);
@@ -505,11 +521,9 @@ function handleWindowResize(_: Event): void {
                 </button>
             </div>
             <div data-id={DropdownMenuId.TIMERANGE_SELECT} id="timeRange">
-                <button onclick={preventDefault(handleDropDownMenu)}>
-                    <bold style:font-weight="bold" data-part="start" data-value="00:00:00:00">00:00:00:00</bold>
-                    <small>to</small>
-                    <bold style:font-weight="bold" data-part="end" data-value="00:00:00:00">00:00:00:00</bold>
-                </button>
+                <TimecodeCapture bind:value={timeRangeIn} />
+                <small>to</small>
+                <TimecodeCapture bind:value={timeRangeOut} />
             </div>
         </div>
     </form>
@@ -599,27 +613,54 @@ function handleWindowResize(_: Event): void {
 
 <MenuManagerView manager={MENU_MANAGER}>
     {#snippet searchSelect(menu)}
-        <MenuSearchSelect dataId={menu.id} target={menu.rect} data={menu.data} onclick={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} oninput={handleParameterSearch}>
-            {#snippet listItem(value: string)}
-                <div class="checkbox">
-                    <CheckBox checked={pinnedContains(menu.id, value)} {value} oninput={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} />
-                    <big>{value}</big>
-                </div>
-            {/snippet}
-
-            {#snippet empty()}
-                <div>Start typing to search...</div>
-            {/snippet}
+        <MenuSearchSelect {empty} {listItem} dataId={menu.id} target={menu.rect} data={menu.data} onclick={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} oninput={handleParameterSearch}>
         </MenuSearchSelect>
     {/snippet}
+
+    {#snippet searchTimeRange(menu)}
+        <MenuSearchTimeRange {empty} {listItem} dataId={menu.id} target={menu.rect} data={menu.data} onclick={(event) => handleSelectedParameter(event as MouseEvent, menu.id)} oninput={handleParameterSearch}>
+        </MenuSearchTimeRange>
+    {/snippet}
 </MenuManagerView>
+
+{#snippet listItem(id: number, value: string)}
+    <div class="checkbox">
+        <CheckBox checked={pinnedContains(id, value)} {value} oninput={(event) => handleSelectedParameter(event as MouseEvent, id)} />
+        <big>{value}</big>
+    </div>
+{/snippet}
+
+{#snippet empty()}
+    <div>Start typing to search...</div>
+{/snippet}
 
 <style lang="scss">
 @import "$lib/style.scss";
 
+:global([active]) {
+    .timecode {
+        opacity: 0.0;
+    }
+
+    .timecode + input {
+        display: initial !important;
+    }
+}
+
 div.checkbox {
     @include flex(start, center, row);
     gap: 1rem;
+}
+
+.timecode {
+    position: relative;
+    @include flex(start, start, row);
+    gap: 2px;
+
+    li {
+        padding: 4px 0px;
+        border-radius: 4px;
+    }
 }
 
 div.root {
@@ -652,6 +693,30 @@ div.root {
             }
 
             > button, > div, > :first-child { color: $blue-3; }
+
+            > #timeRange {
+                position: relative;
+                @include flex(start, center, row);
+                gap: 1rem;
+
+                [data-part="start"] > input, [data-part="end"] > input {
+                    display: none;
+                    position: absolute;
+                    left: 0px;
+                    top: 0px;
+                    width: calc(50% - 1rem);
+                    height: 100%;
+                    background-color: green;
+                }
+
+                ul {
+                    font-weight: bold;
+                }
+
+                * {
+                    font-size: 1.25rem;
+                }
+            }
 
             > button, > div {
                 @include button-style(1px solid transparent);
