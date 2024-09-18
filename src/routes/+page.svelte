@@ -86,7 +86,7 @@ function handleSelectedParameter(event: MouseEvent, dataId: number) {
 
         if (pinned) {
             const value = buttonElement.getAttribute("data-value");
-            if (value && pinnedProjects.has(value)) {
+            if (value && pinned.has(value)) {
                 pinned.delete(value);
             } else if (value) {
                 pinned.add(value);
