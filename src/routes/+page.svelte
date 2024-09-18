@@ -244,21 +244,23 @@ function handleSearch(event: Event) {
                     const queryParameters: SearchQueryParameters = {
                         amount: "100",
                         line: (event.target) ? event.target.value : "",
-                        projects: Array.from(pinnedProjects),
-                        segments: Array.from(pinnedSegments),
-                        speakers: Array.from(pinnedSpeakers),
-                        timeRange: {
+                    };
+
+                    if (pinnedProjects.size > 0) queryParameters["projects"] = Array.from(pinnedProjects);
+                    if (pinnedSegments.size > 0) queryParameters["segments"] = Array.from(pinnedSegments);
+                    if (pinnedSpeakers.size > 0) queryParameters["speakers"] = Array.from(pinnedSpeakers);
+
+                    const sum = (acc: number, n: number) => { return acc + n; };
+                    if (timeRangeIn.parts.reduce(sum, 0) > 0 || timeRangeOut.parts.reduce(sum, 0) > 0) {
+                        queryParameters["timeRange"] = {
                             start: timeRangeIn,
                             end: timeRangeOut,
                             toString() {
                                 // @ts-ignore
                                 return `${this.start}+${this.start.fps}-${this.end}+${this.end.fps}`;
                             }
-                        },
-
-                    };
-
-                    console.log(queryParameters);
+                        };
+                    }
 
                     tableBuffer = SEARCH_CLIENT.get(ApiParse.search, queryParameters);
                     tableBuffer.then(async (payload) => {

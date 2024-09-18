@@ -47,10 +47,10 @@ export interface Search {
 
 export interface SearchQueryParameters {
     line: string,
-    projects?: Array<string> | "*",
-    segments?: Array<string> | "*",
-    speakers?: Array<string> | "*",
-    timeRange?: { start: Timecode, end: Timecode, toString: () => string } | "*",
+    projects?: Array<string>,
+    segments?: Array<string>,
+    speakers?: Array<string>,
+    timeRange?: { start: Timecode, end: Timecode, toString: () => string },
     amount?: string,
 }
 
