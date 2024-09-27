@@ -6,6 +6,12 @@ A web client for querying audio-post production data.
 
 ## Developing
 
+### Install Dependencies
+
+```bash
+npm i
+```
+
 ### Serve Client
 
 ```bash
