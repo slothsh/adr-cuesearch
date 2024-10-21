@@ -94,7 +94,7 @@ type SameAs<T, U> = keyof T extends keyof U
     : false;
 
 export type ParametersFor<T> =
-      SameAs<T, Ping> extends true   ? PingQueryParameters
+      SameAs<T, Ping> extends true ? PingQueryParameters
     : SameAs<T, Search> extends true ? SearchQueryParameters
     : SameAs<T, Projects> extends true ? ProjectsQueryParameters
     : SameAs<T, Segments> extends true ? SegmentsQueryParameters
