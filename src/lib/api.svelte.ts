@@ -18,6 +18,8 @@ export const enum ColumnKind {
     LINE,
 }
 
+export type SearchQueryKind = "cues" | "projects" | "segments" | "speakers";
+
 export function columnDisplayName(kind: ColumnKind): string | null {
     switch (kind) {
         case ColumnKind.PROD: return "Prod. ID";
@@ -52,6 +54,7 @@ export interface SearchQueryParameters {
     speakers?: Array<string>,
     timeRange?: { start: Timecode, end: Timecode, toString: () => string },
     amount?: string,
+    type?: SearchQueryKind,
 }
 
 export interface Projects {
@@ -63,6 +66,7 @@ export interface Projects {
 export interface ProjectsQueryParameters {
     projects: string,
     amount?: string,
+    type?: SearchQueryKind,
 }
 
 export interface Segments {
@@ -74,6 +78,7 @@ export interface Segments {
 export interface SegmentsQueryParameters {
     segments: string,
     amount?: string,
+    type?: SearchQueryKind,
 }
 
 export interface Speakers {
@@ -85,6 +90,7 @@ export interface Speakers {
 export interface SpeakersQueryParameters {
     speakers: string,
     amount?: string,
+    type?: SearchQueryKind,
 }
 
 type SameAs<T, U> = keyof T extends keyof U
@@ -130,6 +136,8 @@ export namespace Parse {
 
     export function projects(body: string): Projects | null  {
         const data: Projects = JSON.parse(body);
+        console.log(data);
+
         if (!("hash" in data) || !("results" in data)) {
             console.error("response data for Projects is invalid");
             console.error(body);

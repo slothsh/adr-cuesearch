@@ -87,6 +87,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
             encoder = hashlib.sha1()
             encoder.update(query_params['projects'][0].encode())
+            print(query_params['projects'])
             hash = encoder.digest().hex()
 
             response = {

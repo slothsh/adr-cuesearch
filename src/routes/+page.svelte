@@ -320,7 +320,7 @@ function handleParameterSearch(event: Event) {
                 if (projectsRequest && hash === projectsRequest.hash) {
                     console.warn("not implemented");
                 } else {
-                    projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { amount: "100", projects: (event.target) ? event.target.value : "" } );
+                    projectsBuffer = SEARCH_CLIENT.get(ApiParse.projects, { amount: "100", type: "projects", projects: (event.target) ? event.target.value : "" } );
                     projectsBuffer.then(async (payload) => {
                         if (payload === null) return;
 
@@ -352,7 +352,7 @@ function handleParameterSearch(event: Event) {
                 if (segmentsRequest && hash === segmentsRequest.hash) {
                     console.warn("not implemented");
                 } else {
-                    segmentsBuffer = SEARCH_CLIENT.get(ApiParse.segments, { amount: "100", segments: (event.target) ? event.target.value : "" } );
+                    segmentsBuffer = SEARCH_CLIENT.get(ApiParse.segments, { amount: "100", type: "segments", segments: (event.target) ? event.target.value : "" } );
                     segmentsBuffer.then(async (payload) => {
                         if (payload === null) return;
 
@@ -384,7 +384,7 @@ function handleParameterSearch(event: Event) {
                 if (speakersRequest && hash === speakersRequest.hash) {
                     console.warn("not implemented");
                 } else {
-                    speakersBuffer = SEARCH_CLIENT.get(ApiParse.speakers, { amount: "100", speakers: (event.target) ? event.target.value : "" } );
+                    speakersBuffer = SEARCH_CLIENT.get(ApiParse.speakers, { amount: "100", type: "speakers", speakers: (event.target) ? event.target.value : "" } );
                     speakersBuffer.then(async (payload) => {
                         if (payload === null) return;
 
@@ -826,7 +826,8 @@ div.root {
 
                     div.spacer {
                         border-bottom: 1px solid $blue-2;
-                        padding: 2rem 0rem;
+                        padding: 2rem 1rem;
+                        text-align: left;
                     }
                 }
 
